@@ -27,7 +27,7 @@ ephew
 You'll see a banner:
 
 ```
-ephew 1.1.0 running on http://127.0.0.1:47821
+ephew 0.1.0 running on http://127.0.0.1:47821
 point your Anthropic client at this proxy:
   export ANTHROPIC_BASE_URL=http://127.0.0.1:47821
 hotkey: ⇧⌘E to cycle modes
