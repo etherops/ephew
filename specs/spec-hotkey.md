@@ -29,9 +29,9 @@ Invariants:
 
 ### Default shortcut
 
-`⌃⌥⌘V` — Control + Option + Command + V.
+`⇧⌘E` — Shift + Command + E.
 
-Rationale: "V for verbosity"; the quad-modifier combo is almost never bound by other apps, minimizing collisions. Hard-coded in v1; not user-configurable (see [spec-cli.md](./spec-cli.md) out-of-scope).
+Rationale: one-handed left-side reach (left pinky on Shift/Cmd, left middle finger on E). No default macOS system binding, no collision with common browser / editor bindings. "E" is a small mnemonic nod to "ephew". Hard-coded in v1; not user-configurable (see [spec-cli.md](./spec-cli.md) out-of-scope).
 
 ### Registration
 
@@ -41,9 +41,9 @@ Use `pyobjc-framework-Carbon`. Pseudocode:
 from Carbon import Events
 from Carbon.CarbonEvents import RegisterEventHotKey, InstallEventHandler, ...
 
-# Virtual keycode for V is 9 on US layout
-key_code = 9
-modifiers = cmdKey | optionKey | controlKey
+# Virtual keycode for E is 14 on US layout
+key_code = 14
+modifiers = cmdKey | shiftKey
 
 hotkey_id = EventHotKeyID(signature=fourCharCode(b"EFEW"), id=1)
 status, hotkey_ref = RegisterEventHotKey(
@@ -100,4 +100,4 @@ Hotkey behavior can't be unit-tested without a running event loop. Verify via:
 
 - A smoke test that `HotkeyRegistration(state).install()` returns a bool and doesn't raise on a machine where the shortcut is already taken (simulate by registering twice; second call returns `False`).
 - A test that `install()` followed by `uninstall()` is clean — no leaked event handlers.
-- Manual (per [spec-testing.md](./spec-testing.md)): after `ephew` is running, press `⌃⌥⌘V`; observe the chip and tray menu advance one step. Repeat 7 times to confirm wrap-around from `table` back to `normal`. Confirm no macOS privacy prompt appears on first launch.
+- Manual (per [spec-testing.md](./spec-testing.md)): after `ephew` is running, press `⇧⌘E`; observe the chip and tray menu advance one step. Repeat 7 times to confirm wrap-around from `table` back to `normal`. Confirm no macOS privacy prompt appears on first launch.

@@ -54,13 +54,25 @@ In Pre-MVP this path is handled by the "All other paths" passthrough branch belo
 
 ### Validation logging
 
-Every request emits exactly one log line at INFO level with the shape:
+Every request emits exactly one log line at INFO level. Pre-MVP shape:
 
 ```
 proxy method=POST path=/v1/messages upstream_status=200 bytes=12345
 ```
 
-Fields: request method, request path (no query string), upstream HTTP status code, total response byte count forwarded to the client. No headers, no body, no client/upstream IPs. This line is what makes Pre-MVP validation possible — you can tail the log and see `claude` traffic flowing through. The line is emitted from Pre-MVP onward; MVP and Dot do not change its shape.
+MVP adds the active mode name (always):
+
+```
+proxy method=POST path=/v1/messages upstream_status=200 bytes=12345 mode=concise
+```
+
+When the CLI is launched with `--verbose` (see [spec-cli.md](./spec-cli.md)) **and** the active mode has a non-`None` directive, the same line is extended with the directive (repr-quoted for unambiguous whitespace display):
+
+```
+proxy method=POST path=/v1/messages upstream_status=200 bytes=12345 mode=concise directive='One sentence.'
+```
+
+Fields: request method, request path (no query string), upstream HTTP status code, total response byte count forwarded to the client, active mode name, and optionally the directive. No headers, no request body, no user message content, no client/upstream IPs. Still exactly one log line per request.
 
 ### Headers
 

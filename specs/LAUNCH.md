@@ -32,7 +32,7 @@ Three phases between the current spec-complete state and a community-tested open
 - [spec-transform.md](./spec-transform.md) — pure directive-injection function
 - [spec-proxy.md](./spec-proxy.md) — add transform integration on `POST /v1/messages` (reads `state.get()`, calls `transform.apply`, re-serializes, forwards). Passthrough behavior from Pre-MVP is preserved for every other path.
 - [spec-tray.md](./spec-tray.md) — rumps `StatusItem`, menu with every mode, checkmark shows active mode, Quit handler. This is the *entire* MVP UI: the menu both *changes* the mode (click) and *shows* the mode (checkmark).
-- [spec-hotkey.md](./spec-hotkey.md) — Carbon `RegisterEventHotKey` for `⌃⌥⌘V`; no Accessibility prompt. The headline toggle feature.
+- [spec-hotkey.md](./spec-hotkey.md) — Carbon `RegisterEventHotKey` for `⇧⌘E`; no Accessibility prompt. The headline toggle feature.
 - [spec-cli.md](./spec-cli.md) — full wiring: tray + hotkey + AppKit runloop; tray Quit and SIGINT both trigger clean shutdown.
 - [spec-testing.md](./spec-testing.md) — unit tests `test_transform`, `test_modes`, `test_state`, `test_cli`; manual integration checklist on macOS 14+
 
@@ -40,8 +40,8 @@ Three phases between the current spec-complete state and a community-tested open
 
 **Exit criteria:**
 - On a clean macOS 14+ machine: `pip install -e . && ephew` launches with the tray icon visible, hotkey active — **zero** macOS privacy prompts (no Accessibility, no Input Monitoring).
-- `⌃⌥⌘V` advances the mode; the tray checkmark updates within ~100 ms. Clicking a mode in the menu also updates it.
-- Running `claude` in each of the seven modes produces visibly different response shapes (binary = "yes"/"no", concise = one sentence, table = markdown table, etc.).
+- `⇧⌘E` advances the mode; the tray checkmark updates within ~100 ms. Clicking a mode in the menu also updates it.
+- Running `claude` in each of the six modes produces visibly different response shapes (very-concise = yes/no or ≤5 words, concise = one sentence, table = markdown table, etc.).
 - Ctrl-C and tray → Quit both shut down cleanly within 3 s.
 - `README.md` in the repo root documents install + usage.
 

@@ -1,7 +1,7 @@
 [project]
 name = "ephew"
-version = "0.1.0"
-description = "Local passthrough proxy for the Anthropic API. Pre-MVP milestone."
+version = "0.2.0"
+description = "Local verbosity-toggle proxy for the Anthropic API (MVP)."
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Patrick Kennel" }]
@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.111",
     "uvicorn>=0.30",
     "httpx>=0.27",
+    "rumps>=0.4; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]

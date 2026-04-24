@@ -74,10 +74,10 @@ Runs once per release on macOS 14+ with a real Anthropic API key. Reproducible c
    ```
    Confirm a normal response.
 4. Cycle through every mode. For each:
-   - Press `⌃⌥⌘V`.
+   - Press `⇧⌘E`.
    - Confirm chip + tray checkmark update within ~100 ms.
    - Re-run `claude "what is 2+2"` (or similar question). Confirm response shape matches directive:
-     - `binary` → single word "yes" or "no"
+     - `very-concise` → yes/no if the question admits one, otherwise ≤5 words
      - `very-concise` → 1–5 words
      - `concise` → one sentence
      - `thorough` → detailed paragraph+

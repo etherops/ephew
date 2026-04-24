@@ -49,7 +49,7 @@ Return the body unchanged (a deep copy, to preserve the pure-function contract).
 
 ### Separator
 
-Always `"\n\n"` between the user's real text and the directive. Two newlines give the model clear paragraph separation without requiring any markdown parsing.
+Always `"\n\n"` between the user's real text and the directive. Two newlines give the model clear paragraph separation without requiring any markdown parsing. **No brackets, tags, or parens wrap the directive** — bare text after a blank line reads to the model as a natural user P.S., whereas `[markers]` / `<tags>` / `(parens)` look like prompt-injection syntax and trigger eval-rig resistance (see [spec-modes.md](./spec-modes.md) directive-phrasing principles).
 
 ### Serialization
 

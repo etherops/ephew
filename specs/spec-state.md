@@ -65,6 +65,16 @@ Equivalent to `self.set(next_mode(self.get()))`, but with the read + write + lis
 
 Append under lock. No deduplication — callers are expected to register exactly once.
 
+### Change logging
+
+Every *actual* mode change (i.e. `set` or `cycle` where the previous and new modes differ) emits exactly one INFO log line on the `ephew.state` logger:
+
+```
+state mode changed to=concise
+```
+
+`set` / `cycle` calls that produce no change (`set` to the current mode, or `cycle` on a single-mode registry) emit no log line. Emission happens after the lock is released, in the same sequence as subscriber notification, so the log line and the UI update appear in deterministic order. No-op to structured logging consumers: exactly one record per change, no record per no-op.
+
 ## Dependencies
 
 Upstream:

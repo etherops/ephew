@@ -66,7 +66,7 @@ tests/                                                                         [
 
 1. User starts `ephew`. The CLI installs the credential-redaction logging filter, loads modes, creates `CurrentMode(default=normal)`, launches uvicorn on a daemon thread, waits for its `started` event, registers the Carbon hotkey, creates the chip + tray, then enters the AppKit runloop.
 2. User exports `ANTHROPIC_BASE_URL=http://127.0.0.1:47821` and runs an Anthropic client (Claude Code, `anthropic` SDK, curl, etc.).
-3. User presses `⌃⌥⌘V`. `CurrentMode.cycle()` fires; subscribers (tray, chip) re-render on the main thread.
+3. User presses `⇧⌘E`. `CurrentMode.cycle()` fires; subscribers (tray, chip) re-render on the main thread.
 4. Client makes `POST /v1/messages`. The proxy reads `CurrentMode.get()`, calls `transform.apply(body, mode)`, and forwards to `api.anthropic.com` with the client's credential headers intact.
 5. The upstream SSE stream is piped through to the client byte-for-byte.
 6. On quit (tray → Quit or Ctrl-C on the CLI), the main thread signals uvicorn to stop, unregisters the hotkey, closes the chip, and exits the runloop.
@@ -89,7 +89,7 @@ tests/                                                                         [
 
 ## Glossary
 
-- **mode** — a named verbosity setting (e.g. `binary`, `concise`, `table`) with an associated directive string.
+- **mode** — a named verbosity setting (e.g. `very-concise`, `concise`, `table`) with an associated directive string.
 - **directive** — the text appended to the last user message to request the desired response shape.
 - **chip** — the transparent always-on-top `NSWindow` showing the current mode in a screen corner.
 - **upstream** — `https://api.anthropic.com`, the real Anthropic API endpoint.

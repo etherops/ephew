@@ -28,16 +28,34 @@ Invariants:
 
 ### Icon
 
-Use a text glyph title rather than an image in v1: `rumps.App(name="Ephew", title="✎", quit_button=None)`. The glyph renders cleanly at all menu-bar sizes without bundling image assets. Tooltip (if rumps exposes it) reflects the current mode's `display`.
+The menu-bar title is a single-line string of the form `"fu {glyph}"`, set via rumps' standard `self.title` assignment. No custom image rendering.
+
+Examples:
+
+```
+fu .        (very-concise — also handles yes/no)
+fu ..       (concise)
+fu -        (normal)
+fu "        (thorough)
+fu ""       (very-thorough)
+fu ⊞        (table)
+```
+
+Rationale: the single-line form renders cleanly in the menu bar with the system's native font, weight, and vertical metrics. The two-line stacked form required manual `NSImage` rendering and fought with descenders, baseline alignment, and menu-bar row height. One line is visually consistent across all modes and trivially maintained.
+
+The title updates in real time on every state change — hotkey press, menu click, programmatic `state.set()` — via the existing subscription + `AppHelper.callAfter` pathway.
+
+Tooltip (if rumps exposes it) reflects the current mode's `display`.
 
 ### Menu layout
 
+Default layout (no `--verbose`):
+
 ```
 ── Ephew ──
-  ● normal
-  ○ binary
   ○ very concise
   ○ concise
+  ● normal
   ○ thorough
   ○ very thorough
   ○ table
@@ -45,7 +63,21 @@ Use a text glyph title rather than an image in v1: `rumps.App(name="Ephew", titl
   Quit
 ```
 
-Built by iterating `MODES`. Each mode's menu item uses `mode.display` as the title. The active mode's item has `state=1` (rumps' checkmark); others have `state=0`.
+Under `--verbose` (see [spec-cli.md](./spec-cli.md)), each non-`normal` mode's menu item is annotated with its directive text in parentheses:
+
+```
+── Ephew ──
+  ○ very concise (Yes or no if possible. Max 5 words otherwise.)
+  ○ concise (One sentence.)
+  ● normal
+  ○ thorough (Include reasoning, tradeoffs, and an example if it helps.)
+  ○ very thorough (Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.)
+  ○ table (Markdown table only, no prose.)
+  ─────────
+  Quit
+```
+
+Built by iterating `MODES`. Each mode's menu item label is `mode.display`, optionally suffixed with ` ({directive})` when `--verbose` is set and the mode has a directive. The `TrayApp` constructor takes a `verbose: bool = False` flag to control this at build time. The active mode's item has `state=1` (rumps' checkmark); others have `state=0`.
 
 ### Mode-click handler
 
@@ -57,10 +89,10 @@ In `__init__`, `state.subscribe(self._on_mode_change)`. The callback runs on wha
 
 ```python
 def _on_mode_change(self, new_mode: Mode) -> None:
-    AppHelper.callAfter(self._refresh_checkmarks, new_mode)
+    AppHelper.callAfter(self._refresh_ui, new_mode)
 ```
 
-`_refresh_checkmarks` sets `state=1` on the new mode's item and `state=0` on all others. Runs on the main thread, so direct AppKit mutation is safe.
+`_refresh_ui` assigns `self.title = f"fu {mode.glyph}"` and sets `state=1` on the new mode's menu item and `state=0` on all others. Runs on the main thread, so direct AppKit mutation is safe.
 
 ### Quit
 
@@ -91,4 +123,4 @@ Third-party: `rumps`.
 Unit tests are limited because `rumps` wraps AppKit and is awkward to mock. Verify via:
 
 - A smoke test that constructs `TrayApp(state, on_quit=lambda: None)` without crashing (import-only; don't call `.run()`).
-- Manual (per [spec-testing.md](./spec-testing.md)): confirm on launch the icon appears, the menu lists all 7 modes in cycle order, `normal` is checked, clicking `concise` updates the checkmark, pressing the hotkey also updates the checkmark, Quit exits cleanly.
+- Manual (per [spec-testing.md](./spec-testing.md)): confirm on launch the menu-bar title reads `fu -` (normal glyph), the menu lists all 6 modes in cycle order (`very concise` → `concise` → `normal` → `thorough` → `very thorough` → `table`) with `normal` checked, clicking `concise` updates both the checkmark and the title (to `fu ..`), pressing the hotkey also updates both, Quit exits cleanly. When launched with `--verbose`, menu items for non-`normal` modes are annotated with their directive in parentheses.

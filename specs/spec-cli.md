@@ -37,6 +37,7 @@ Invariants:
 
 ### CLI flags
 
+- `--verbose` / `-v` — two effects: (1) extend the per-request validation log line with the full directive text that was appended (see [spec-proxy.md](./spec-proxy.md)); (2) annotate each non-`normal` tray menu item with its directive in parentheses (see [spec-tray.md](./spec-tray.md)). Off by default; intended for one-off runs when the user wants to see exactly which directive the proxy is injecting.
 - `--port N` — override the default proxy port (`47821`). Falls back to `EPHEW_PORT` env var if flag not given, then to the default. **[Dot]**
 - `--version` — print version from `ephew.__version__` and exit 0. **[Dot]**
 - `--help` — standard help. The expanded listing of every mode with its directive is **[Dot]**; through MVP, `--help` shows only the flag help.
@@ -66,7 +67,7 @@ Printed once to stderr:
 ephew running on http://127.0.0.1:47821
 point your Anthropic client at this proxy:
   export ANTHROPIC_BASE_URL=http://127.0.0.1:47821
-hotkey: ⌃⌥⌘V to cycle modes
+hotkey: ⇧⌘E to cycle modes
 current mode: normal (passthrough)
 ```
 
@@ -81,10 +82,11 @@ hotkey unavailable; use the menu-bar icon to change modes
 Standard argparse help, followed by a modes section rendered from `MODES`:
 
 ```
-modes (cycle in order; hotkey ⌃⌥⌘V):
+modes (cycle in order; hotkey ⇧⌘E):
+  very-concise   Yes or no if possible. Max 5 words otherwise.
+  concise        One sentence.
   normal         passthrough — no directive appended
-  binary         Respond with only "yes" or "no". ...
-  very-concise   Respond in 1 to 5 words.
+  thorough       Include reasoning, tradeoffs, and an example if it helps.
   ...
 ```
 
