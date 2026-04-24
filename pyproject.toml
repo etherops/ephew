@@ -1,6 +1,6 @@
 [project]
 name = "ephew"
-version = "1.1.0"
+version = "0.1.0"
 description = "Local verbosity-toggle proxy for the Anthropic API."
 requires-python = ">=3.12"
 license = { text = "MIT" }
