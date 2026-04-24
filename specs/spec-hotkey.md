@@ -50,7 +50,7 @@ status, hotkey_ref = RegisterEventHotKey(
     key_code, modifiers, hotkey_id, GetApplicationEventTarget(), 0
 )
 if status != noErr:
-    log.warning("hotkey unavailable (status=%d); menu-only operation", status)
+    log.warning("hotkey unavailable (conflict with another app); menu-only operation")
     return False
 
 # Install the handler that dispatches kEventHotKeyPressed to our callback.

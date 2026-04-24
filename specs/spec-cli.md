@@ -37,10 +37,10 @@ Invariants:
 
 ### CLI flags
 
-- `--verbose` / `-v` — two effects: (1) extend the per-request validation log line with the full directive text that was appended (see [spec-proxy.md](./spec-proxy.md)); (2) annotate each non-`normal` tray menu item with its directive in parentheses (see [spec-tray.md](./spec-tray.md)). Off by default; intended for one-off runs when the user wants to see exactly which directive the proxy is injecting.
-- `--port N` — override the default proxy port (`47821`). Falls back to `EPHEW_PORT` env var if flag not given, then to the default. **[Dot]**
-- `--version` — print version from `ephew.__version__` and exit 0. **[Dot]**
-- `--help` — standard help. The expanded listing of every mode with its directive is **[Dot]**; through MVP, `--help` shows only the flag help.
+- `--verbose` / `-v` — two effects: (1) extend the per-request validation log line with the full directive text that was appended (see [spec-proxy.md](./spec-proxy.md)); (2) annotate each non-`normal` tray menu item with its directive in parentheses (see [spec-tray.md](./spec-tray.md)). Off by default. **Scope:** raises only the `ephew.*` logger namespace to DEBUG. Third-party libraries (`httpx`, `httpcore`, `uvicorn`, `asyncio`, etc.) stay at WARNING regardless of `--verbose` — `--verbose` is for *our* output, not for stack-tracing the dependencies.
+- `--port N` — override the default proxy port (`47821`). Resolution order: `--port` flag > `EPHEW_PORT` env var > default `47821`.
+- `--version` — print version from `ephew.__version__` to stdout and exit 0.
+- `--help` — print help to stdout and exit 0. The help includes a modes table rendered from `ephew.modes.MODES` (glyph, display name, directive).
 
 Parsed with `argparse`. Unknown flags exit 2.
 
@@ -61,34 +61,51 @@ Parsed with `argparse`. Unknown flags exit 2.
 
 ### Startup banner
 
-Printed once to stderr:
+Printed once to stderr after the server is confirmed bound:
 
 ```
-ephew running on http://127.0.0.1:47821
+ephew 1.1.0 running on http://127.0.0.1:47821
 point your Anthropic client at this proxy:
   export ANTHROPIC_BASE_URL=http://127.0.0.1:47821
 hotkey: ⇧⌘E to cycle modes
-current mode: normal (passthrough)
 ```
 
-If the port was overridden, the URL reflects the override. If hotkey registration failed, an extra line is printed:
+If the port was overridden, the URL reflects the override. If hotkey registration failed (collision with another app), an extra line is printed in place of the `hotkey:` line:
 
 ```
-hotkey unavailable; use the menu-bar icon to change modes
+hotkey unavailable (conflict with another app); use the menu-bar icon to change modes
 ```
+
+### Structured startup failures
+
+On any failure to start the proxy (e.g. port-in-use), the CLI prints a single line to stderr and exits with code 1:
+
+```
+ephew: failed to start — port 47821 is already in use on 127.0.0.1
+```
+
+The message names the concrete cause (no bare "RuntimeError" or stacktrace). Known failure classes:
+
+- `PortInUseError` → `port N is already in use on HOST`
+- any other `Exception` → `failed to start — <exception message>`
+
+Stacktraces do not appear on stderr in the normal failure path; they are available only at `--verbose` DEBUG logging level.
 
 ### `--help` output
 
-Standard argparse help, followed by a modes section rendered from `MODES`:
+Standard argparse help, followed by a modes section (as the argparse `epilog`, rendered with `RawDescriptionHelpFormatter` to preserve line breaks):
 
 ```
 modes (cycle in order; hotkey ⇧⌘E):
-  very-concise   Yes or no if possible. Max 5 words otherwise.
-  concise        One sentence.
-  normal         passthrough — no directive appended
-  thorough       Include reasoning, tradeoffs, and an example if it helps.
-  ...
+  .     very concise    Yes or no if possible. Max 5 words otherwise.
+  ..    concise         One sentence.
+  -     normal          passthrough — no directive appended
+  "     thorough        Include reasoning, tradeoffs, and an example if it helps.
+  ""    very thorough   Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.
+  ⊞     table           Markdown table only, no prose.
 ```
+
+Built dynamically from `ephew.modes.MODES` so the help never drifts from the runtime modes.
 
 ### Signal handling
 

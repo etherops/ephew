@@ -4,7 +4,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from ephew.server import ProxyServer
+from ephew.server import PortInUseError, ProxyServer
 
 
 def _free_port() -> int:
@@ -57,7 +57,7 @@ def test_url_property():
     assert server.url == "http://127.0.0.1:12345"
 
 
-def test_port_in_use_raises():
+def test_port_in_use_raises_typed_error():
     port = _free_port()
     occupier = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     occupier.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
@@ -65,7 +65,9 @@ def test_port_in_use_raises():
     occupier.listen(1)
     try:
         server = ProxyServer(_trivial_app(), port=port)
-        with pytest.raises((RuntimeError, TimeoutError, OSError)):
+        with pytest.raises(PortInUseError) as exc_info:
             server.start()
+        assert str(port) in str(exc_info.value)
+        assert "127.0.0.1" in str(exc_info.value)
     finally:
         occupier.close()

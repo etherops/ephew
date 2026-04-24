@@ -4,7 +4,7 @@
 
 - **Pre-MVP:** passthrough-only unit tests — `test_proxy` (covers passthrough cases and validation-log behavior), `test_server`, `test_security`. Plus the manual Pre-MVP validation: `export ANTHROPIC_BASE_URL=http://127.0.0.1:47821 && claude "hi"` works through the proxy with requests visibly logged.
 - **MVP:** unit tests for the feature layer — `test_transform`, `test_modes`, `test_state`, `test_cli` — plus `test_proxy`'s transform cases. Full manual integration checklist on macOS 14+ (tray + hotkey + end-to-end against `api.anthropic.com` with a real key + credential-leak grep).
-- **Dot:** GitHub Actions CI running the unit suite on every PR; `test_chip` smoke test; `--port` / `--version` CLI tests.
+- **Dot:** GitHub Actions CI (`.github/workflows/test.yml`) running the unit suite on macOS and Linux for every push and PR; `test_chip` smoke test; `--port` / `--version` CLI tests.
 
 ## Purpose
 
@@ -107,7 +107,7 @@ Third-party test tooling: `pytest`, `httpx` (with `MockTransport`), `pytest-asyn
 
 ## Out of scope
 
-- CI pipeline definition (a minimal GitHub Actions workflow is left for the implementation phase; not part of these specs)
+- Multi-Python-version matrix in CI (sticks to 3.12 in `.github/workflows/test.yml`)
 - Coverage targets (aim high but don't gate merges on a number in v1)
 - Mutation testing, property-based testing (`hypothesis`), or snapshot testing
 - Load / soak / chaos testing

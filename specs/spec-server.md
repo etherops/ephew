@@ -49,11 +49,24 @@ self._server = uvicorn.Server(config)
 
 ### Startup handshake
 
+Before spawning the uvicorn thread, `start()` pre-checks that the port can be bound and raises a typed exception on the common failure — port-in-use — so the caller (CLI, see [spec-cli.md](./spec-cli.md)) can format a clear one-line error without parsing stack traces:
+
 ```python
+class PortInUseError(RuntimeError): ...
+
 def start(self) -> None:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((self._host, self._port))
+    except OSError as exc:
+        raise PortInUseError(
+            f"port {self._port} is already in use on {self._host}"
+        ) from exc
+    finally:
+        probe.close()
+
     self._thread = threading.Thread(target=self._run, daemon=True, name="ephew-proxy")
     self._thread.start()
-    # Poll the server.started flag; uvicorn sets it once the socket is bound.
     deadline = time.monotonic() + 5.0
     while not self._server.started:
         if not self._thread.is_alive():
@@ -65,6 +78,8 @@ def start(self) -> None:
 def _run(self) -> None:
     asyncio.run(self._server.serve())
 ```
+
+The probe-then-bind sequence is racy in the strict sense (another process could grab the port between probe close and uvicorn bind), but it is strictly better than the previous silent-`SystemExit`-in-thread behavior: the user gets a clear, typed, actionable message in the common case, and the rare race falls back to the existing "thread exited before binding" path.
 
 ### Shutdown
 

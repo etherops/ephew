@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import threading
 import time
 
@@ -9,6 +10,10 @@ import fastapi
 import uvicorn
 
 log = logging.getLogger("ephew.server")
+
+
+class PortInUseError(RuntimeError):
+    """The configured port is already bound by another process."""
 
 
 class ProxyServer:
@@ -24,6 +29,8 @@ class ProxyServer:
         return f"http://{self._host}:{self._port}"
 
     def start(self) -> None:
+        self._probe_port()
+
         config = uvicorn.Config(
             app=self._app,
             host=self._host,
@@ -45,6 +52,17 @@ class ProxyServer:
             if time.monotonic() > deadline:
                 raise TimeoutError("proxy failed to bind within 5s")
             time.sleep(0.02)
+
+    def _probe_port(self) -> None:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            probe.bind((self._host, self._port))
+        except OSError as exc:
+            raise PortInUseError(
+                f"port {self._port} is already in use on {self._host}"
+            ) from exc
+        finally:
+            probe.close()
 
     def _run(self) -> None:
         assert self._server is not None
