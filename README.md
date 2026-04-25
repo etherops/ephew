@@ -8,15 +8,22 @@ Claude Code (and every other Anthropic-API client) has no fast way to toggle res
 
 ## Install
 
+### macOS (recommended)
+
 ```bash
-git clone <this-repo>
-cd ephew
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+brew tap etherops/ephew
+brew install ephew
 ```
 
-Requires Python 3.12+ and macOS. Linux will run the proxy headlessly but without the tray, chip, or hotkey.
+### Other platforms
+
+```bash
+pipx install ephew     # or: pip install ephew
+```
+
+Requires Python 3.12+. Full UX (menu-bar tray, global hotkey) is macOS-only; Linux runs the proxy headlessly.
+
+For development setup (`git clone` + editable install + tests), see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## Run
 
