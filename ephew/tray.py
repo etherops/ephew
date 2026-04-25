@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 import rumps
 from PyObjCTools import AppHelper
@@ -24,13 +25,13 @@ def _menu_label(mode: Mode, verbose: bool) -> str:
     return mode.display
 
 
-class TrayApp(rumps.App):
+class TrayApp(rumps.App):  # type: ignore[misc]
     def __init__(
         self,
         state: CurrentMode,
         on_quit: Callable[[], None],
         verbose: bool = False,
-    ):
+    ) -> None:
         super().__init__(name="Ephew", title=_title_for(state.get()), quit_button=None)
         self._state = state
         self._on_quit = on_quit
@@ -41,19 +42,22 @@ class TrayApp(rumps.App):
 
     def _build_menu(self) -> None:
         for mode in MODES:
-            item = rumps.MenuItem(_menu_label(mode, self._verbose), callback=self._make_click_handler(mode))
+            item = rumps.MenuItem(
+                _menu_label(mode, self._verbose), callback=self._make_click_handler(mode)
+            )
             self._items_by_mode[mode.name] = item
             self.menu.add(item)
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("Quit", callback=self._handle_quit))
         self._refresh_ui(self._state.get())
 
-    def _make_click_handler(self, mode: Mode):
-        def handler(_sender):
+    def _make_click_handler(self, mode: Mode) -> Callable[[Any], None]:
+        def handler(_sender: Any) -> None:
             self._state.set(mode)
+
         return handler
 
-    def _handle_quit(self, _sender):
+    def _handle_quit(self, _sender: Any) -> None:
         try:
             self._on_quit()
         except Exception:

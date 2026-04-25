@@ -2,9 +2,25 @@
 name = "ephew"
 version = "0.1.0"
 description = "Local verbosity-toggle proxy for the Anthropic API."
+readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Patrick Kennel" }]
+keywords = ["anthropic", "claude", "proxy", "verbosity", "cli", "macos"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: Proxy Servers",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+]
 dependencies = [
     "fastapi>=0.111",
     "uvicorn>=0.30",
@@ -12,10 +28,22 @@ dependencies = [
     "rumps>=0.4; sys_platform == 'darwin'",
 ]
 
+[project.urls]
+Homepage = "https://github.com/etherops/ephew"
+Repository = "https://github.com/etherops/ephew"
+Issues = "https://github.com/etherops/ephew/issues"
+Changelog = "https://github.com/etherops/ephew/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=5",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+    "pre-commit>=3.7",
 ]
 
 [project.scripts]
@@ -31,3 +59,66 @@ packages = ["ephew"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["ephew"]
+branch = true
+omit = [
+    # tray/hotkey require macOS GUI; covered by manual integration test
+    "ephew/tray.py",
+    "ephew/hotkey.py",
+    # __main__ is daemon orchestration (signal handlers, AppKit runloop wiring,
+    # rumps Timer); exercised end-to-end by the manual integration checklist.
+    "ephew/__main__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",  # line too long — handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # allow assert False in tests
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+files = ["ephew"]
+
+[[tool.mypy.overrides]]
+module = ["rumps", "rumps.*", "PyObjCTools.*", "AppKit.*", "Foundation.*", "Carbon.*"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = ["B101"]  # allow assert (used for invariants in non-test code)

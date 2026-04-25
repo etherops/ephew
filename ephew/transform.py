@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 from ephew.modes import Mode
 
 SEPARATOR = "\n\n"
 
 
-def apply(body: dict, mode: Mode) -> dict:
+def apply(body: dict[str, Any], mode: Mode) -> dict[str, Any]:
     if mode.directive is None:
         return copy.deepcopy(body)
 
@@ -27,7 +28,7 @@ def apply(body: dict, mode: Mode) -> dict:
     return new_body
 
 
-def _inject(msg: dict, directive: str) -> None:
+def _inject(msg: dict[str, Any], directive: str) -> None:
     content = msg.get("content")
     if isinstance(content, str):
         msg["content"] = content + SEPARATOR + directive

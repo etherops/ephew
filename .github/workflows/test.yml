@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  pytest:
+  checks:
     strategy:
       fail-fast: false
       matrix:
@@ -17,9 +17,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Run pytest
-        run: pytest -v
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format (ruff format --check)
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        run: mypy ephew/
+
+      - name: Security lint (bandit)
+        run: bandit -r ephew/ -c pyproject.toml
+
+      - name: Dependency CVE scan (pip-audit)
+        # CVE-2026-3219 affects pip itself; no fix released yet (waived).
+        run: pip-audit --ignore-vuln CVE-2026-3219
+
+      - name: Tests + coverage
+        run: pytest --cov=ephew --cov-fail-under=80

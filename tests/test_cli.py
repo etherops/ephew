@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 
 from ephew.__main__ import main
@@ -20,6 +18,7 @@ def test_help_lists_modes(capsys):
     captured = capsys.readouterr()
     # Epilog must include every non-normal mode and its directive.
     from ephew.modes import MODES
+
     for mode in MODES:
         assert mode.display in captured.out
     # And at least one full directive text appears.
@@ -32,6 +31,7 @@ def test_version_prints_and_exits_zero(capsys):
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     from ephew import __version__
+
     assert __version__ in captured.out
 
 
@@ -74,8 +74,7 @@ def test_verbose_does_not_enable_third_party_debug():
     saved_level = root.level
     saved_handlers = list(root.handlers)
     saved_namespaced = {
-        name: _logging.getLogger(name).level
-        for name in ("ephew", "httpx", "httpcore", "uvicorn")
+        name: _logging.getLogger(name).level for name in ("ephew", "httpx", "httpcore", "uvicorn")
     }
     try:
         _configure_logging(verbose=True)

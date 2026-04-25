@@ -1,6 +1,6 @@
 import copy
 
-from ephew.modes import MODES, find_by_name
+from ephew.modes import find_by_name
 from ephew.transform import SEPARATOR, apply
 
 
