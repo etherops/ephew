@@ -1,8 +1,8 @@
 import logging
 
 from ephew.security import (
-    CredentialRedactionFilter,
     REDACTION_PLACEHOLDER,
+    CredentialRedactionFilter,
     install_redaction,
 )
 

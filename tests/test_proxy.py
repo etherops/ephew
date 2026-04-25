@@ -77,7 +77,7 @@ def test_non_messages_post_not_transformed():
 
     def handler(request):
         received["body"] = request.content
-        return httpx.Response(200, content=b'{}')
+        return httpx.Response(200, content=b"{}")
 
     client, state = _make_client_and_state(handler, mode=find_by_name("concise"))
     tc = TestClient(build_app(client, state))
@@ -103,7 +103,7 @@ def test_sse_streaming_passthrough():
 
     client, state = _make_client_and_state(handler)
     tc = TestClient(build_app(client, state))
-    with tc.stream("POST", "/v1/messages", content=b'{}') as r:
+    with tc.stream("POST", "/v1/messages", content=b"{}") as r:
         assert r.status_code == 200
         body = b"".join(r.iter_bytes())
     assert body == b"".join(chunks)
@@ -115,7 +115,7 @@ def test_upstream_4xx_forwarded_verbatim():
 
     client, state = _make_client_and_state(handler)
     tc = TestClient(build_app(client, state))
-    r = tc.post("/v1/messages", content=b'{}')
+    r = tc.post("/v1/messages", content=b"{}")
     assert r.status_code == 401
     assert r.content == b'{"error":"unauthorized"}'
 
@@ -126,7 +126,7 @@ def test_connect_error_returns_502():
 
     client, state = _make_client_and_state(handler)
     tc = TestClient(build_app(client, state))
-    r = tc.post("/v1/messages", content=b'{}')
+    r = tc.post("/v1/messages", content=b"{}")
     assert r.status_code == 502
     assert "upstream_unreachable" in r.text
 
@@ -137,23 +137,23 @@ def test_drops_host_and_content_length_from_request():
     def handler(request):
         received["host"] = request.headers.get("host")
         received["content_length"] = request.headers.get("content-length")
-        return httpx.Response(200, content=b'{}')
+        return httpx.Response(200, content=b"{}")
 
     client, state = _make_client_and_state(handler)
     tc = TestClient(build_app(client, state))
-    tc.post("/v1/messages", content=b'{}', headers={"content-type": "application/json"})
+    tc.post("/v1/messages", content=b"{}", headers={"content-type": "application/json"})
     assert received["host"] == "api.anthropic.com"
     assert received["content_length"] == "2"
 
 
 def test_validation_log_line_emitted(caplog):
     def handler(_r):
-        return httpx.Response(200, content=b'hello', headers={"content-type": "text/plain"})
+        return httpx.Response(200, content=b"hello", headers={"content-type": "text/plain"})
 
     client, state = _make_client_and_state(handler)
     tc = TestClient(build_app(client, state))
     with caplog.at_level(logging.INFO, logger="ephew.proxy"):
-        r = tc.post("/v1/messages", content=b'{}')
+        r = tc.post("/v1/messages", content=b"{}")
     assert r.status_code == 200
     messages = [rec.getMessage() for rec in caplog.records]
     assert any(
@@ -164,7 +164,7 @@ def test_validation_log_line_emitted(caplog):
 
 def test_validation_log_includes_mode(caplog):
     def handler(_r):
-        return httpx.Response(200, content=b'{}')
+        return httpx.Response(200, content=b"{}")
 
     concise = find_by_name("concise")
     client, state = _make_client_and_state(handler, mode=concise)
@@ -175,14 +175,13 @@ def test_validation_log_includes_mode(caplog):
 
     messages = [rec.getMessage() for rec in caplog.records]
     assert any(
-        "method=POST" in m and "mode=concise" in m and "directive=" not in m
-        for m in messages
+        "method=POST" in m and "mode=concise" in m and "directive=" not in m for m in messages
     ), f"expected validation line with mode but no directive; got: {messages}"
 
 
 def test_validation_log_includes_directive_at_debug_level(caplog):
     def handler(_r):
-        return httpx.Response(200, content=b'{}')
+        return httpx.Response(200, content=b"{}")
 
     concise = find_by_name("concise")
     client, state = _make_client_and_state(handler, mode=concise)
@@ -192,15 +191,14 @@ def test_validation_log_includes_directive_at_debug_level(caplog):
         tc.post("/v1/messages", content=body)
 
     messages = [rec.getMessage() for rec in caplog.records]
-    assert any(
-        "mode=concise" in m and concise.directive in m
-        for m in messages
-    ), f"expected directive in validation line at DEBUG; got: {messages}"
+    assert any("mode=concise" in m and concise.directive in m for m in messages), (
+        f"expected directive in validation line at DEBUG; got: {messages}"
+    )
 
 
 def test_normal_mode_validation_line_has_no_directive(caplog):
     def handler(_r):
-        return httpx.Response(200, content=b'{}')
+        return httpx.Response(200, content=b"{}")
 
     client, state = _make_client_and_state(handler)  # normal mode
     tc = TestClient(build_app(client, state))
@@ -217,7 +215,7 @@ def test_malformed_json_body_forwarded_untransformed():
 
     def handler(request):
         received["body"] = request.content
-        return httpx.Response(200, content=b'{}')
+        return httpx.Response(200, content=b"{}")
 
     client, state = _make_client_and_state(handler, mode=find_by_name("concise"))
     tc = TestClient(build_app(client, state))

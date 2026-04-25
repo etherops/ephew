@@ -3,8 +3,9 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import logging
+from collections.abc import Callable
 from ctypes import CFUNCTYPE, POINTER, Structure, byref, c_int32, c_uint32, c_void_p
-from typing import Callable
+from typing import Any
 
 log = logging.getLogger("ephew.hotkey")
 
@@ -48,14 +49,24 @@ def _load_carbon() -> ctypes.CDLL | None:
 
     lib.RegisterEventHotKey.restype = c_int32
     lib.RegisterEventHotKey.argtypes = [
-        c_uint32, c_uint32, _EventHotKeyID, c_void_p, c_uint32, POINTER(c_void_p),
+        c_uint32,
+        c_uint32,
+        _EventHotKeyID,
+        c_void_p,
+        c_uint32,
+        POINTER(c_void_p),
     ]
     lib.UnregisterEventHotKey.restype = c_int32
     lib.UnregisterEventHotKey.argtypes = [c_void_p]
 
     lib.InstallEventHandler.restype = c_int32
     lib.InstallEventHandler.argtypes = [
-        c_void_p, c_void_p, c_uint32, POINTER(_EventTypeSpec), c_void_p, POINTER(c_void_p),
+        c_void_p,
+        c_void_p,
+        c_uint32,
+        POINTER(_EventTypeSpec),
+        c_void_p,
+        POINTER(c_void_p),
     ]
     lib.RemoveEventHandler.restype = c_int32
     lib.RemoveEventHandler.argtypes = [c_void_p]
@@ -63,12 +74,15 @@ def _load_carbon() -> ctypes.CDLL | None:
 
 
 class HotkeyRegistration:
-    def __init__(self, on_press: Callable[[], None]):
+    def __init__(self, on_press: Callable[[], object]) -> None:
+        # on_press's return value is ignored; using `object` lets callers pass functions
+        # that return values (e.g. state.cycle returns Mode) without a type-error wrapper.
         self._on_press = on_press
         self._carbon: ctypes.CDLL | None = None
         self._hotkey_ref = c_void_p()
         self._handler_ref = c_void_p()
-        self._upp: _EventHandlerProc | None = None
+        # CFUNCTYPE objects don't have a clean static type; treat as Any.
+        self._upp: Any = None
 
     def install(self) -> bool:
         self._carbon = _load_carbon()
@@ -95,7 +109,7 @@ class HotkeyRegistration:
             self._hotkey_ref = c_void_p()
             return False
 
-        def _handler(_next_handler, _event, _user_data):
+        def _handler(_next_handler: Any, _event: Any, _user_data: Any) -> int:
             try:
                 self._on_press()
             except Exception:
@@ -103,9 +117,7 @@ class HotkeyRegistration:
             return noErr
 
         self._upp = _EventHandlerProc(_handler)
-        event_type = _EventTypeSpec(
-            eventClass=kEventClassKeyboard, eventKind=kEventHotKeyPressed
-        )
+        event_type = _EventTypeSpec(eventClass=kEventClassKeyboard, eventKind=kEventHotKeyPressed)
         status = self._carbon.InstallEventHandler(
             target,
             ctypes.cast(self._upp, c_void_p),
@@ -115,9 +127,7 @@ class HotkeyRegistration:
             byref(self._handler_ref),
         )
         if status != noErr:
-            log.warning(
-                "failed to install hotkey event handler (status=%d)", status
-            )
+            log.warning("failed to install hotkey event handler (status=%d)", status)
             self._carbon.UnregisterEventHotKey(self._hotkey_ref)
             self._hotkey_ref = c_void_p()
             self._upp = None

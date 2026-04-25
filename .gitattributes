@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.py text diff=python
+*.md text
+*.toml text
+*.yaml text
+*.yml text
+*.cfg text
+*.ini text
+LICENSE text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary

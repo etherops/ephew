@@ -5,6 +5,7 @@ import logging
 import socket
 import threading
 import time
+from typing import cast
 
 import fastapi
 import uvicorn
@@ -58,16 +59,15 @@ class ProxyServer:
         try:
             probe.bind((self._host, self._port))
         except OSError as exc:
-            raise PortInUseError(
-                f"port {self._port} is already in use on {self._host}"
-            ) from exc
+            raise PortInUseError(f"port {self._port} is already in use on {self._host}") from exc
         finally:
             probe.close()
 
     def _run(self) -> None:
-        assert self._server is not None
+        # `start()` always sets `_server` before spawning the thread that calls `_run`.
+        server = cast(uvicorn.Server, self._server)
         try:
-            asyncio.run(self._server.serve())
+            asyncio.run(server.serve())
         except SystemExit as exc:
             log.warning("proxy server thread exited early (SystemExit code=%s)", exc.code)
         except Exception:

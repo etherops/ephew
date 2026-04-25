@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator, Mapping
 
 import httpx
 from fastapi import FastAPI, Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from ephew import transform
 from ephew.modes import Mode
@@ -14,17 +15,19 @@ from ephew.state import CurrentMode
 log = logging.getLogger("ephew.proxy")
 
 _DROP_REQUEST_HEADERS = frozenset({"host", "content-length"})
-_DROP_RESPONSE_HEADERS = frozenset({
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "te",
-    "trailers",
-    "transfer-encoding",
-    "upgrade",
-    "content-length",
-    "content-encoding",
-})
+_DROP_RESPONSE_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "te",
+        "trailers",
+        "transfer-encoding",
+        "upgrade",
+        "content-length",
+        "content-encoding",
+    }
+)
 
 
 def build_app(upstream_client: httpx.AsyncClient, state: CurrentMode) -> FastAPI:
@@ -34,10 +37,14 @@ def build_app(upstream_client: httpx.AsyncClient, state: CurrentMode) -> FastAPI
         "/{path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
-    async def proxy(path: str, request: Request):
+    async def proxy(path: str, request: Request) -> Response:
         body = await request.body()
         mode = state.get()
-        if request.method == "POST" and request.url.path == "/v1/messages" and mode.directive is not None:
+        if (
+            request.method == "POST"
+            and request.url.path == "/v1/messages"
+            and mode.directive is not None
+        ):
             body = _transform_body(body, mode)
         return await _forward(request, upstream_client, body, mode)
 
@@ -53,7 +60,9 @@ def _transform_body(body: bytes, mode: Mode) -> bytes:
     return json.dumps(new_body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
-async def _forward(request: Request, client: httpx.AsyncClient, body: bytes, mode: Mode):
+async def _forward(
+    request: Request, client: httpx.AsyncClient, body: bytes, mode: Mode
+) -> Response:
     method = request.method
     path = request.url.path
     query = request.url.query
@@ -75,7 +84,7 @@ async def _forward(request: Request, client: httpx.AsyncClient, body: bytes, mod
     response_headers = _filter_response_headers(upstream.headers)
     media_type = upstream.headers.get("content-type")
 
-    async def body_iter():
+    async def body_iter() -> AsyncIterator[bytes]:
         total = 0
         try:
             async for chunk in upstream.aiter_bytes():
@@ -93,22 +102,31 @@ async def _forward(request: Request, client: httpx.AsyncClient, body: bytes, mod
     )
 
 
-def _log_validation(method: str, path: str, status, total: int, mode: Mode) -> None:
+def _log_validation(method: str, path: str, status: object, total: int, mode: Mode) -> None:
     if log.isEnabledFor(logging.DEBUG) and mode.directive is not None:
         log.info(
             "proxy method=%s path=%s upstream_status=%s bytes=%d mode=%s directive=%r",
-            method, path, status, total, mode.name, mode.directive,
+            method,
+            path,
+            status,
+            total,
+            mode.name,
+            mode.directive,
         )
     else:
         log.info(
             "proxy method=%s path=%s upstream_status=%s bytes=%d mode=%s",
-            method, path, status, total, mode.name,
+            method,
+            path,
+            status,
+            total,
+            mode.name,
         )
 
 
-def _filter_request_headers(incoming) -> dict[str, str]:
+def _filter_request_headers(incoming: Mapping[str, str]) -> dict[str, str]:
     return {k: v for k, v in incoming.items() if k.lower() not in _DROP_REQUEST_HEADERS}
 
 
-def _filter_response_headers(incoming) -> dict[str, str]:
+def _filter_response_headers(incoming: Mapping[str, str]) -> dict[str, str]:
     return {k: v for k, v in incoming.items() if k.lower() not in _DROP_RESPONSE_HEADERS}

@@ -3,7 +3,6 @@ import pytest
 from ephew.modes import (
     DEFAULT,
     MODES,
-    Mode,
     all_names,
     find_by_name,
     next_mode,
@@ -85,5 +84,7 @@ def test_all_names_in_cycle_order():
 
 
 def test_mode_is_frozen():
-    with pytest.raises(Exception):
+    import dataclasses
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
         MODES[0].name = "hacked"  # type: ignore[misc]

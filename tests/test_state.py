@@ -1,8 +1,7 @@
 import logging
 import threading
-import time
 
-from ephew.modes import MODES, find_by_name
+from ephew.modes import MODES
 from ephew.state import CurrentMode
 
 
@@ -75,9 +74,9 @@ def test_mode_change_emits_log(caplog):
     with caplog.at_level(logging.INFO, logger="ephew.state"):
         state.set(MODES[1])
     messages = [rec.getMessage() for rec in caplog.records]
-    assert any(
-        "mode changed" in m and MODES[1].name in m for m in messages
-    ), f"expected mode-change log; got: {messages}"
+    assert any("mode changed" in m and MODES[1].name in m for m in messages), (
+        f"expected mode-change log; got: {messages}"
+    )
 
 
 def test_setting_same_mode_emits_no_log(caplog):

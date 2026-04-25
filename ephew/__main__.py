@@ -5,7 +5,6 @@ import logging
 import os
 import signal
 import sys
-import time
 
 from ephew import __version__
 
@@ -72,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
 
     quit_requested = {"flag": False}
 
-    def _on_signal(signum, _frame) -> None:
+    def _on_signal(_signum: int, _frame: object) -> None:
         quit_requested["flag"] = True
 
     signal.signal(signal.SIGINT, _on_signal)
@@ -80,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
 
     tray = TrayApp(state, on_quit=shutdown, verbose=args.verbose)
 
-    def _check_quit(_timer):
+    def _check_quit(_timer: object) -> None:
         if quit_requested["flag"]:
             rumps.quit_application()
 
@@ -111,10 +110,11 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help=f"proxy port (overrides EPHEW_PORT env var; default 47821)",
+        help="proxy port (overrides EPHEW_PORT env var; default 47821)",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="extend per-request log with directive text; annotate tray menu items",
     )
@@ -172,7 +172,9 @@ def _print_banner(url: str, hotkey_installed: bool) -> None:
     if hotkey_installed:
         lines.append("hotkey: ⇧⌘E to cycle modes")
     else:
-        lines.append("hotkey unavailable (conflict with another app); use the menu-bar icon to change modes")
+        lines.append(
+            "hotkey unavailable (conflict with another app); use the menu-bar icon to change modes"
+        )
     lines.append("Ctrl-C or tray → Quit to stop.")
     print("\n".join(lines), file=sys.stderr)
 
