@@ -4,7 +4,7 @@ Six phases between scratch and a community-tested open-source release. Phases 1�
 
 ## Versioning
 
-This launch plan does not version each internal phase. The first **public** release — the artifact that lands on GitHub and PyPI at the end of Phase 6 — is **`v0.1.0`**. It bundles all of Phases 1–3. Subsequent feature work follows semver from there: `0.x` while the API/CLI surface is still moving, `1.0` when the surface is committed.
+This launch plan does not version each internal phase. The first **public** release — the artifact that lands on GitHub and Homebrew at the end of Phase 6 — is **`v0.1.0`**. It bundles all of Phases 1–3. Subsequent feature work follows semver from there: `0.x` while the API/CLI surface is still moving, `1.0` when the surface is committed.
 
 ## Phase 1 — Pre-MVP (passthrough proxy, validated)
 
@@ -117,7 +117,7 @@ These pieces stay healthy on every PR, not just at launch:
 - **`.gitattributes`** — enforce LF line endings on text files; mark binary assets explicitly.
 - **`pyproject.toml` classifiers** — full Trove set: `Development Status :: 3 - Alpha`, `License :: OSI Approved :: MIT License`, `Operating System :: MacOS`, `Operating System :: POSIX :: Linux`, `Programming Language :: Python :: 3`, `Programming Language :: Python :: 3.12`, `Topic :: Internet :: Proxy Servers`, `Topic :: Utilities`. Plus `keywords`, `urls.Homepage`, `urls.Repository`, `urls.Issues`, `urls.Changelog`.
 - **`pyproject.toml` script aliases** — define `[tool.ephew.scripts]` (or use a `Makefile` / `tasks.py`) so the standard checks have one-word entry points: `make lint` / `make test` / `make check` / `make build`. Documented in `CONTRIBUTING.md`.
-- **README badges** — once the repo is public: CI status, license, PyPI version, Python versions supported, code coverage. Pinned to the public URLs from Phase 5/6.
+- **README badges** — once the repo is public: CI status, license, Python versions supported, code coverage. Pinned to the public URLs from Phase 5.
 - **Coverage** — `pytest-cov` in dev deps; `[tool.coverage]` in `pyproject.toml`; CI step `pytest --cov=ephew --cov-report=term-missing --cov-fail-under=80`. Optional Codecov.io upload + badge.
 - **Public API surface** — `__all__` exported from each module to make the importable surface explicit. `ephew.__init__` exports `__version__`.
 - **`CITATION.cff`** — skipped (not academic; not warranted).
@@ -162,9 +162,9 @@ These pieces stay healthy on every PR, not just at launch:
 - A stranger can `git clone https://github.com/etherops/ephew && cd ephew && pip install -e . && ephew --version` and have it work.
 - All README links resolve (or are explicitly marked "coming in Phase 6").
 
-## Phase 6 — Publish to PyPI and Homebrew
+## Phase 6 — Publish to Homebrew
 
-**Goal:** users install ephew in one command from either Homebrew (macOS) or pip (any platform). Both channels ship at the same `v0.1.0` tag and reference the same source artifact.
+**Goal:** users install ephew in one command via Homebrew. macOS-only — no PyPI / pip distribution channel.
 
 **Hard prerequisite:** Phase 5 must complete first. Homebrew taps require a *public* GitHub repository. `brew tap` clones the formula repo over plain HTTPS; private repos break the install for everyone but you.
 
@@ -209,16 +209,12 @@ end
 
 **3. Why no `resource` blocks.**
 
-We deliberately omit `resource` blocks — pip resolves and installs all deps fresh from PyPI at install time. This is non-idiomatic for `homebrew/core` (which requires reproducible source-only builds), but acceptable for a third-party tap because:
+We deliberately omit `resource` blocks — pip resolves and installs all deps fresh from upstream package indexes at install time. This is non-idiomatic for `homebrew/core` (which requires reproducible source-only builds), but acceptable for a third-party tap because:
 
 - Reproducibility is bounded by `pyproject.toml`'s version constraints.
 - The compile-from-source policy is what was breaking installs on macs with mismatched SDKs in the first place.
 - `--prefer-binary` lets pip use wheels where they exist (pyobjc) and source-build pure-Python deps where they don't matter.
 - Install time drops from ~10–20 minutes to **~8 seconds** for a fresh install.
-
-If we ever need full reproducibility back, the path is: pin every dep with `==` in `pyproject.toml`, optionally re-add `resource` blocks generated from the lockfile.
-
-Pin all resources to source distributions (`.tar.gz`), not wheels — formulas need source so brew can verify checksums and build from a known-clean state.
 
 **4. Test the formula locally.**
 
@@ -256,41 +252,26 @@ ephew                  # starts the daemon
 
 Keep the `git clone` instructions in `CONTRIBUTING.md` for developers; the README leads with brew.
 
-### PyPI publish
+### Documenting the install path
 
-- **Trusted publishing via GitHub Actions** — no long-lived API token in the repo. PyPI verifies an OIDC claim from the publish workflow.
-- Workflow file: `.github/workflows/publish.yml`. Triggers on a pushed `v*` tag.
-- Workflow steps: `python -m build` → `pypa/gh-action-pypi-publish` → upload `dist/*.tar.gz` and `dist/*.whl`.
-- **One-time PyPI setup (manual, by maintainer):** at <https://pypi.org/manage/account/publishing/>, register a pending publisher for the project name `ephew` pointing at `etherops/ephew`, workflow `publish.yml`, environment `pypi`. After the first publish lands, the project becomes a normal published project.
-- Local dry-run before tagging: `python -m build` produces both sdist and wheel; `twine check dist/*` validates the metadata; install into a fresh venv to confirm.
-- Smoke test post-publish: `pipx install ephew --pip-args='--no-cache-dir'` on a fresh shell, then `ephew --version` returns `0.1.0`.
-
-### Documenting the install paths
-
-In `etherops/ephew/README.md`, the install section after Phase 6 reads:
+In `etherops/ephew/README.md`, the install section reads:
 
 ```
 ## Install
 
-### macOS (recommended)
 brew tap etherops/funstuff
 brew install ephew
-
-### Other platforms
-pipx install ephew      # or: pip install ephew
 ```
 
-Keep the `git clone … && pip install -e .` block in `CONTRIBUTING.md` for developers; the README leads with the user-facing channels.
+Keep the `git clone … && pip install -e .` block in `CONTRIBUTING.md` for developers.
 
 ### Exit criteria
 
 - `etherops/homebrew-funstuff` repo exists (public, MIT) with `Formula/ephew.rb` and a small README.
 - `brew tap etherops/funstuff && brew install ephew` succeeds on a fresh Mac (or a clean test account on the dev Mac).
-- `pipx install ephew` (or `pip install ephew` into a fresh venv) succeeds and `ephew --version` prints `0.1.0`.
 - `brew test ephew` is green.
-- `etherops/ephew/README.md` install section documents both channels with brew first.
-- `CHANGELOG.md` has a `[0.1.0] — published <date>` entry referencing the GitHub Release, the PyPI release, and the brew tap.
-- `https://pypi.org/project/ephew/0.1.0/` resolves and shows the same description as the GitHub repo.
+- `etherops/ephew/README.md` install section documents the brew flow.
+- `CHANGELOG.md` has a `[0.1.0] — published <date>` entry referencing the GitHub Release and the brew tap.
 
 ## How phase annotations appear in the specs
 

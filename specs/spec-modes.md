@@ -83,7 +83,7 @@ Detailed pattern semantics live in [spec-transform.md](./spec-transform.md).
 
 ### Response markers
 
-Each non-`none` mode carries a **`marker_instruction`** — a short directive that asks the model to end its response with a space and then `(ephew<glyph>)`. Markers are **default on**; the `--no-markers` CLI flag disables them globally for the daemon's lifetime. The marker text mirrors the menu-bar glyph, so what is at the top of the screen is what shows up at the end of the response. The leading space prevents the marker from running into the response's final punctuation (e.g. `it is. (ephew-c)` rather than `it is.(ephew-c)`).
+Each non-`none` mode carries a **`marker_instruction`** — a short directive that asks the model to end its response with a space and then `(ephew<glyph>)`. The marker text mirrors the menu-bar glyph, so what is at the top of the screen is what shows up at the end of the response. The leading space prevents the marker from running into the response's final punctuation (e.g. `it is. (ephew-c)` rather than `it is.(ephew-c)`).
 
 Concrete marker formats:
 
