@@ -143,49 +143,154 @@ These pieces stay healthy on every PR, not just at launch:
 - Test coverage ≥ 80% (or an explicit waiver in `CHANGELOG.md` for any module excluded).
 - Fresh-clone install + full check suite is green.
 
-## Phase 5 — Publish to GitHub
+## Phase 5 — Make the GitHub repo public
 
-**Goal:** ephew is publicly visible at `github.com/<user>/ephew`, with a v0.1.0 release that external users can clone, star, and file issues against.
+**Goal:** ephew is publicly visible at `github.com/etherops/ephew`, with a `v0.1.0` release that external users can clone, star, and file issues against. This phase is the **hard prerequisite** for Phase 6 — Homebrew taps require a public source repo.
 
 **Scope:**
-- Create the public GitHub repository (description, topics: `claude`, `anthropic`, `proxy`, `cli`, `macos`, `python`).
-- Push `main`; protect `main` (no direct pushes, PRs require CI green).
-- Create the `v0.1.0` git tag; cut a GitHub Release using `CHANGELOG.md` content.
+- Flip `etherops/ephew` from private → public. Add description and topics: `claude`, `anthropic`, `proxy`, `cli`, `macos`, `python`, `verbosity`.
+- Protect `main`: no direct pushes; PRs require CI green; require linear history.
+- Create the `v0.1.0` git tag; cut a GitHub Release using the `[0.1.0]` section of `CHANGELOG.md` as release notes.
 - Re-verify CI runs on the public repo (open a no-op PR to trigger).
-- Update README install instructions and links from placeholders to the live URL.
+- Update README install instructions and links — though the brew install path lands in Phase 6, so the v0.1.0 README can have placeholder text saying "brew install via tap, see CHANGELOG" until Phase 6 wraps up.
 - Optionally enable Discussions and pin a "feedback wanted" thread.
 
 **Exit criteria:**
-- Repo is public at the agreed URL.
-- `v0.1.0` GitHub Release is live with release notes.
+- `https://github.com/etherops/ephew` is publicly accessible.
+- Tag `v0.1.0` exists and is pushed; GitHub Release `v0.1.0` is published with release notes.
 - CI green on `main` and on a representative PR.
-- A fresh `git clone https://github.com/<user>/ephew && cd ephew && pip install -e . && ephew --version` works for a stranger.
-- README links resolve.
+- A stranger can `git clone https://github.com/etherops/ephew && cd ephew && pip install -e . && ephew --version` and have it work.
+- All README links resolve (or are explicitly marked "coming in Phase 6").
 
-## Phase 6 — Publish to easy-install channel
+## Phase 6 — Publish to PyPI and Homebrew
 
-**Goal:** users can install ephew in one command from a package manager — no `git clone` required.
+**Goal:** users install ephew in one command from either Homebrew (macOS) or pip (any platform). Both channels ship at the same `v0.1.0` tag and reference the same source artifact.
 
-**Scope (primary — PyPI):**
-- PyPI account + API token (or set up GitHub Actions trusted publishing).
-- `python -m build` produces `dist/ephew-0.1.0.tar.gz` and `dist/ephew-0.1.0-py3-none-any.whl`.
-- `twine upload dist/*` (or trusted-publishing workflow) ships to PyPI.
-- Smoke test from a clean venv on a different machine: `pip install ephew && ephew --version` returns `ephew 0.1.0`.
-- README install section updated to lead with `pip install ephew`.
+**Hard prerequisite:** Phase 5 must complete first. Homebrew taps require a *public* GitHub repository. `brew tap` clones the formula repo over plain HTTPS; private repos break the install for everyone but you.
 
-**Scope (secondary — Homebrew tap, optional):**
-- Create a separate public repo `<user>/homebrew-ephew`.
-- Author `Formula/ephew.rb` using `Language::Python::Virtualenv`; depend on `python@3.12`.
-- `brew tap <user>/ephew && brew install ephew` succeeds on a fresh Mac.
-- Document `brew tap`/`brew install` in README as the macOS-friendly path.
-- Skip the official `homebrew-cask` route until the project is mature (popularity thresholds, signing requirements).
+### Scope
 
-**Exit criteria:**
-- `pip install ephew` succeeds from a clean machine and `ephew --version` prints `0.1.0`.
-- (If Homebrew path taken) `brew tap` + `brew install` succeed and `ephew --version` prints `0.1.0`.
-- README install section reflects the new one-liner.
-- `CHANGELOG.md` has a `[0.1.0] — published <date>` entry.
-- The version tag, the PyPI release, and (if applicable) the Homebrew formula all reference the same `0.1.0` artifact.
+**1. Create the tap repository.**
+
+A second public repo, separate from `etherops/ephew`:
+
+- Name: `etherops/homebrew-funstuff` (the `homebrew-` prefix is mandatory; brew strips it when computing the tap name).
+- Visibility: public.
+- Contents: a single directory `Formula/` with a single file `ephew.rb`. Plus a small `README.md` explaining how to tap.
+- License: MIT (same as the main repo).
+
+**2. Author `Formula/ephew.rb`.**
+
+The formula uses a **custom install method** rather than the standard `Language::Python::Virtualenv` mixin. The mixin would force `pip install --no-binary :all:` for every transitive dep, which makes pip compile `pyobjc-core` and `pyobjc-framework-Cocoa` from source. That compile fails on any Mac where the Xcode SDK and Command Line Tools SDK don't perfectly align (a common situation — e.g. Xcode 26.2 vs CLT 26.3). The custom approach lets pip use prebuilt wheels for pyobjc, which sidesteps the compile entirely.
+
+```ruby
+class Ephew < Formula
+  desc "Local verbosity-toggle proxy for the Anthropic API"
+  homepage "https://github.com/etherops/ephew"
+  url "https://github.com/etherops/ephew/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "FILL_IN_AFTER_TAGGING"
+  license "MIT"
+
+  depends_on "python@3.12"
+
+  def install
+    venv = libexec
+    system Formula["python@3.12"].opt_bin/"python3.12", "-m", "venv", venv
+    system venv/"bin/pip", "install", "--upgrade", "pip"
+    system venv/"bin/pip", "install", "--prefer-binary", buildpath
+    bin.install_symlink venv/"bin/ephew"
+  end
+
+  test do
+    assert_match "ephew #{version}", shell_output("#{bin}/ephew --version")
+  end
+end
+```
+
+**3. Why no `resource` blocks.**
+
+We deliberately omit `resource` blocks — pip resolves and installs all deps fresh from PyPI at install time. This is non-idiomatic for `homebrew/core` (which requires reproducible source-only builds), but acceptable for a third-party tap because:
+
+- Reproducibility is bounded by `pyproject.toml`'s version constraints.
+- The compile-from-source policy is what was breaking installs on macs with mismatched SDKs in the first place.
+- `--prefer-binary` lets pip use wheels where they exist (pyobjc) and source-build pure-Python deps where they don't matter.
+- Install time drops from ~10–20 minutes to **~8 seconds** for a fresh install.
+
+If we ever need full reproducibility back, the path is: pin every dep with `==` in `pyproject.toml`, optionally re-add `resource` blocks generated from the lockfile.
+
+Pin all resources to source distributions (`.tar.gz`), not wheels — formulas need source so brew can verify checksums and build from a known-clean state.
+
+**4. Test the formula locally.**
+
+```bash
+brew tap etherops/funstuff
+brew install --build-from-source ephew
+ephew --version          # → ephew 0.1.0
+ephew                    # tray icon appears, hotkey registers
+brew test ephew          # runs the formula's `test do` block
+brew uninstall ephew
+brew untap etherops/funstuff
+```
+
+The `--build-from-source` flag forces brew to actually exercise the formula's install steps rather than pulling a pre-built bottle (which doesn't exist for a tap formula anyway).
+
+**5. Cut the release.**
+
+Order matters because the formula's `url` line points at a tagged GitHub tarball:
+
+1. In `etherops/ephew`: tag `v0.1.0` and push the tag (see Phase 5 exit criteria).
+2. Compute the tarball SHA256: `curl -sL https://github.com/etherops/ephew/archive/refs/tags/v0.1.0.tar.gz | shasum -a 256`.
+3. In `etherops/homebrew-funstuff`: paste the SHA256 into `Formula/ephew.rb`.
+4. Test (step 4 above).
+5. Push to the tap repo. Done.
+
+**6. Document the install path.**
+
+In `etherops/ephew/README.md`, replace the current `git clone … && pip install -e .` block with:
+
+```bash
+brew tap etherops/funstuff
+brew install ephew
+ephew                  # starts the daemon
+```
+
+Keep the `git clone` instructions in `CONTRIBUTING.md` for developers; the README leads with brew.
+
+### PyPI publish
+
+- **Trusted publishing via GitHub Actions** — no long-lived API token in the repo. PyPI verifies an OIDC claim from the publish workflow.
+- Workflow file: `.github/workflows/publish.yml`. Triggers on a pushed `v*` tag.
+- Workflow steps: `python -m build` → `pypa/gh-action-pypi-publish` → upload `dist/*.tar.gz` and `dist/*.whl`.
+- **One-time PyPI setup (manual, by maintainer):** at <https://pypi.org/manage/account/publishing/>, register a pending publisher for the project name `ephew` pointing at `etherops/ephew`, workflow `publish.yml`, environment `pypi`. After the first publish lands, the project becomes a normal published project.
+- Local dry-run before tagging: `python -m build` produces both sdist and wheel; `twine check dist/*` validates the metadata; install into a fresh venv to confirm.
+- Smoke test post-publish: `pipx install ephew --pip-args='--no-cache-dir'` on a fresh shell, then `ephew --version` returns `0.1.0`.
+
+### Documenting the install paths
+
+In `etherops/ephew/README.md`, the install section after Phase 6 reads:
+
+```
+## Install
+
+### macOS (recommended)
+brew tap etherops/funstuff
+brew install ephew
+
+### Other platforms
+pipx install ephew      # or: pip install ephew
+```
+
+Keep the `git clone … && pip install -e .` block in `CONTRIBUTING.md` for developers; the README leads with the user-facing channels.
+
+### Exit criteria
+
+- `etherops/homebrew-funstuff` repo exists (public, MIT) with `Formula/ephew.rb` and a small README.
+- `brew tap etherops/funstuff && brew install ephew` succeeds on a fresh Mac (or a clean test account on the dev Mac).
+- `pipx install ephew` (or `pip install ephew` into a fresh venv) succeeds and `ephew --version` prints `0.1.0`.
+- `brew test ephew` is green.
+- `etherops/ephew/README.md` install section documents both channels with brew first.
+- `CHANGELOG.md` has a `[0.1.0] — published <date>` entry referencing the GitHub Release, the PyPI release, and the brew tap.
+- `https://pypi.org/project/ephew/0.1.0/` resolves and shows the same description as the GitHub repo.
 
 ## How phase annotations appear in the specs
 

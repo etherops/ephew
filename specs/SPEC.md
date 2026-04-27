@@ -64,7 +64,7 @@ tests/                                                                         [
 
 ## Runtime data flow
 
-1. User starts `ephew`. The CLI installs the credential-redaction logging filter, loads modes, creates `CurrentMode(default=normal)`, launches uvicorn on a daemon thread, waits for its `started` event, registers the Carbon hotkey, creates the chip + tray, then enters the AppKit runloop.
+1. User starts `ephew`. The CLI installs the credential-redaction logging filter, loads modes, creates `CurrentMode(default=none)`, launches uvicorn on a daemon thread, waits for its `started` event, registers the Carbon hotkey, creates the chip + tray, then enters the AppKit runloop.
 2. User exports `ANTHROPIC_BASE_URL=http://127.0.0.1:47821` and runs an Anthropic client (Claude Code, `anthropic` SDK, curl, etc.).
 3. User presses `⇧⌘E`. `CurrentMode.cycle()` fires; subscribers (tray, chip) re-render on the main thread.
 4. Client makes `POST /v1/messages`. The proxy reads `CurrentMode.get()`, calls `transform.apply(body, mode)`, and forwards to `api.anthropic.com` with the client's credential headers intact.
@@ -89,11 +89,11 @@ tests/                                                                         [
 
 ## Glossary
 
-- **mode** — a named verbosity setting (e.g. `very-concise`, `concise`, `table`) with an associated directive string.
+- **mode** — a named verbosity setting (`none`, `concise`, `verbose`, `table`) with an associated directive string. The `none` mode is passthrough.
 - **directive** — the text appended to the last user message to request the desired response shape.
 - **chip** — the transparent always-on-top `NSWindow` showing the current mode in a screen corner.
 - **upstream** — `https://api.anthropic.com`, the real Anthropic API endpoint.
-- **passthrough** — proxy behavior where a request is forwarded without transformation (for paths other than `/v1/messages`, or when mode is `normal`).
+- **passthrough** — proxy behavior where a request is forwarded without transformation (for paths other than `/v1/messages`, or when mode is `none`).
 
 ## Release plan
 

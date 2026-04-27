@@ -39,8 +39,8 @@ Covered in detail in each feature spec; summarized here with the invariant each 
 
 | File | Invariant under test |
 |---|---|
-| `test_transform.py` | Directive is appended to the last user message (string or block-list); `normal` mode is structural identity; input dict is not mutated; defensive no-op on malformed inputs |
-| `test_modes.py` | `MODES` is an immutable tuple; names unique; cycle wraps; `DEFAULT` is `normal`; non-normal modes have non-empty directives |
+| `test_transform.py` | Directive is appended to the last user message (string or block-list); `none` mode is structural identity; in-prompt override flag at end of last user message swaps mode and is stripped; input dict is not mutated; defensive no-op on malformed inputs |
+| `test_modes.py` | `MODES` is an immutable tuple; names unique; cycle wraps; `DEFAULT` is `none`; non-none modes have non-empty directives; `OVERRIDE_FLAGS` covers every mode |
 | `test_state.py` | `get`/`set`/`cycle` are thread-safe; subscribers fire after the lock is released; exceptions in a subscriber don't block other subscribers; a subscriber calling `get()` does not deadlock |
 | `test_proxy.py` | `/v1/messages` is transformed per mode; every other path passes through; SSE passthrough byte-identical; 502 on connection failure; credential headers forwarded byte-identical; `host` and `content-length` stripped |
 | `test_server.py` | `start()` waits for socket bind; `stop()` is idempotent; bind failure raises; server thread is daemon |
@@ -65,7 +65,7 @@ Runs once per release on macOS 14+ with a real Anthropic API key. Reproducible c
    Confirm on first launch:
    - No macOS Accessibility permission prompt appears for Terminal or Python. (This is the whole point of using Carbon `RegisterEventHotKey` — see [spec-hotkey.md](./spec-hotkey.md).)
    - Menu-bar icon is present.
-   - Floating chip is visible in the bottom-right corner, showing `normal`.
+   - Floating chip is visible in the bottom-right corner, showing `none`.
    - Startup banner on stderr matches [spec-cli.md](./spec-cli.md).
 3. Point Claude Code at the proxy in a second terminal:
    ```
@@ -77,12 +77,14 @@ Runs once per release on macOS 14+ with a real Anthropic API key. Reproducible c
    - Press `⇧⌘E`.
    - Confirm chip + tray checkmark update within ~100 ms.
    - Re-run `claude "what is 2+2"` (or similar question). Confirm response shape matches directive:
-     - `very-concise` → yes/no if the question admits one, otherwise ≤5 words
-     - `very-concise` → 1–5 words
+     - `none` → unmodified Claude response
      - `concise` → one sentence
-     - `thorough` → detailed paragraph+
-     - `very-thorough` → multi-paragraph with edge cases
+     - `verbose` → multi-paragraph with reasoning + edge cases
      - `table` → a markdown table, no surrounding prose
+5. Per-request override:
+   - Set tray to `none`. Run `claude "explain channels -v"`. Response must be verbose-shaped despite the tray reading `none`.
+   - Run `claude "now without override"`. Response must revert to `none`-shaped (passthrough).
+   - Confirm the daemon log carries one line with `mode=verbose override=-v` for the first request.
 5. Credential-leak check:
    ```
    grep -c "$(echo $ANTHROPIC_API_KEY | cut -c1-12)" ~/Library/Logs/ephew.log 2>/dev/null || echo 0
@@ -92,7 +94,7 @@ Runs once per release on macOS 14+ with a real Anthropic API key. Reproducible c
 6. Fail-clean check:
    - Kill the daemon (`Cmd-Q` from tray, or `kill` from shell).
    - Re-run `claude "ping"`. Must fail with a connection error, *not* silently succeed by routing directly to `api.anthropic.com`. (This confirms the env var is being honored — a silent fallback would mean some layer is bypassing `ANTHROPIC_BASE_URL`.)
-7. Restart the daemon. Confirm the mode resets to `normal` (no persistence is a documented v1 choice — see [spec-state.md](./spec-state.md)).
+7. Restart the daemon. Confirm the mode resets to `none` (no persistence is a documented v1 choice — see [spec-state.md](./spec-state.md)).
 
 ### What we intentionally do not test
 

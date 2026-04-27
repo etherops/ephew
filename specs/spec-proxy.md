@@ -15,10 +15,17 @@ The proxy is the wire-level half of Ephew. It impersonates `api.anthropic.com` o
 Module: `ephew/proxy.py`.
 
 ```python
-def build_app(state: CurrentMode, upstream_client: httpx.AsyncClient) -> fastapi.FastAPI
+def build_app(
+    upstream_client: httpx.AsyncClient,
+    state: CurrentMode,
+    include_markers: bool = True,
+    activity: ActivityNotifier | None = None,
+) -> starlette.applications.Starlette
 ```
 
-Returns a configured `FastAPI` instance ready to hand to uvicorn (see [spec-server.md](./spec-server.md)). The app has one catch-all route whose handler chooses between transform and passthrough based on method and path.
+Returns a configured `Starlette` instance ready to hand to uvicorn (see [spec-server.md](./spec-server.md)). The app has one catch-all route whose handler chooses between transform and passthrough based on method and path. If an `ActivityNotifier` is supplied, the handler calls `activity.pulse()` once at the top of every request so the tray (or any other subscriber) can reflect the activity in real time — see [spec-activity.md](./spec-activity.md).
+
+We deliberately use bare Starlette rather than FastAPI: FastAPI's added value (Pydantic-based request validation, OpenAPI auto-docs, dependency injection) is unused in this project, and FastAPI's transitive dependency on `pydantic_core` (Rust) makes Homebrew installs slow and complicates packaging. Starlette is pure Python and provides the routing primitive we need natively.
 
 Invariants:
 - `build_app` does no I/O and opens no network connections at construction time.
@@ -29,13 +36,15 @@ Invariants:
 
 ### Endpoint match
 
-A single catch-all route is registered:
+A single catch-all route is registered via Starlette's `Route`:
 
 ```python
-@app.api_route("/{path:path}", methods=["GET","POST","PUT","PATCH","DELETE","OPTIONS"])
+Starlette(routes=[
+    Route("/{path:path}", proxy, methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]),
+])
 ```
 
-The handler branches on `(method, path)`.
+The handler signature is `async def proxy(request: Request) -> Response`. The catch-all path component is available as `request.path_params["path"]`, but in practice we use `request.url.path` since branching is on the *full* request path.
 
 ### `POST /v1/messages` **[MVP]**
 
@@ -44,7 +53,7 @@ In Pre-MVP this path is handled by the "All other paths" passthrough branch belo
 1. Read raw request body bytes.
 2. Parse as JSON. If parsing fails, forward untransformed — preserves Anthropic's own error reporting for malformed bodies.
 3. Read `state.get()` once, store as `mode`.
-4. Call `transform.apply(body_dict, mode)`. Re-serialize to JSON bytes with `json.dumps(..., ensure_ascii=False, separators=(",", ":"))` to match typical client encoding.
+4. Call `new_body, effective_mode = transform.apply(body_dict, mode, include_markers=...)`. The transform layer may swap to a different mode if the user appended an override flag (`-c`, `-v`, `-t`, `-x`, or long forms) to the very end of their message; see [spec-transform.md](./spec-transform.md). Re-serialize to JSON bytes with `json.dumps(..., ensure_ascii=False, separators=(",", ":"))` to match typical client encoding.
 5. Build the upstream request (see "Headers" and "Upstream forwarding").
 6. Stream the upstream response through to the client.
 
@@ -60,19 +69,25 @@ Every request emits exactly one log line at INFO level. Pre-MVP shape:
 proxy method=POST path=/v1/messages upstream_status=200 bytes=12345
 ```
 
-MVP adds the active mode name (always):
+MVP adds the **effective mode name** (always — i.e. post-override):
 
 ```
 proxy method=POST path=/v1/messages upstream_status=200 bytes=12345 mode=concise
 ```
 
-When the CLI is launched with `--verbose` (see [spec-cli.md](./spec-cli.md)) **and** the active mode has a non-`None` directive, the same line is extended with the directive (repr-quoted for unambiguous whitespace display):
+When the request was overridden by an in-prompt flag, an `override=` field is appended naming the exact flag the user typed (so the user can audit override hits in logs):
 
 ```
-proxy method=POST path=/v1/messages upstream_status=200 bytes=12345 mode=concise directive='One sentence.'
+proxy method=POST path=/v1/messages upstream_status=200 bytes=12345 mode=verbose override=-v
 ```
 
-Fields: request method, request path (no query string), upstream HTTP status code, total response byte count forwarded to the client, active mode name, and optionally the directive. No headers, no request body, no user message content, no client/upstream IPs. Still exactly one log line per request.
+When the CLI is launched with `--verbose` (see [spec-cli.md](./spec-cli.md)) **and** the effective mode has a non-`None` directive, the same line is extended with the directive (repr-quoted for unambiguous whitespace display):
+
+```
+proxy method=POST path=/v1/messages upstream_status=200 bytes=12345 mode=concise directive='Fewest words possible. Max one sentence.'
+```
+
+Fields: request method, request path (no query string), upstream HTTP status code, total response byte count forwarded to the client, effective mode name, optionally the override flag, and optionally the directive. No headers, no request body, no user message content, no client/upstream IPs. Still exactly one log line per request.
 
 ### Headers
 
@@ -119,7 +134,7 @@ Downstream (consumers):
 - [spec-server.md](./spec-server.md) — hosts the FastAPI app under uvicorn
 
 Third-party:
-- `fastapi`, `starlette`, `httpx`
+- `starlette`, `httpx`
 
 ## Out of scope
 
@@ -134,7 +149,7 @@ Third-party:
 
 Unit tests (`tests/test_proxy.py`), using `httpx.MockTransport` as fake upstream:
 - `POST /v1/messages` with realistic body; mode=`concise`. Upstream saw body with directive appended to the last user message.
-- `POST /v1/messages` with mode=`normal`. Upstream body equals input body byte-identical.
+- `POST /v1/messages` with mode=`none`. Upstream body equals input body byte-identical.
 - `GET /v1/models`. No JSON parsing, body passed through.
 - Upstream returns SSE stream of 3 chunks. Client sees the same 3 chunks in order, identical bytes.
 - Upstream returns 401. Client gets 401 with identical body.

@@ -5,10 +5,13 @@ import logging
 from collections.abc import AsyncIterator, Mapping
 
 import httpx
-from fastapi import FastAPI, Request
+from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.routing import Route
 
 from ephew import transform
+from ephew.activity import ActivityNotifier
 from ephew.modes import Mode
 from ephew.state import CurrentMode
 
@@ -29,39 +32,52 @@ _DROP_RESPONSE_HEADERS = frozenset(
     }
 )
 
+_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
-def build_app(upstream_client: httpx.AsyncClient, state: CurrentMode) -> FastAPI:
-    app = FastAPI()
 
-    @app.api_route(
-        "/{path:path}",
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    )
-    async def proxy(path: str, request: Request) -> Response:
+def build_app(
+    upstream_client: httpx.AsyncClient,
+    state: CurrentMode,
+    include_markers: bool = True,
+    activity: ActivityNotifier | None = None,
+) -> Starlette:
+    async def proxy(request: Request) -> Response:
+        if activity is not None:
+            activity.pulse()
         body = await request.body()
         mode = state.get()
-        if (
-            request.method == "POST"
-            and request.url.path == "/v1/messages"
-            and mode.directive is not None
-        ):
-            body = _transform_body(body, mode)
-        return await _forward(request, upstream_client, body, mode)
+        effective = mode
+        override: str | None = None
+        if request.method == "POST" and request.url.path == "/v1/messages":
+            body, effective, override = _transform_body(body, mode, include_markers)
+        return await _forward(request, upstream_client, body, effective, override)
 
-    return app
+    return Starlette(routes=[Route("/{path:path}", proxy, methods=_METHODS)])
 
 
-def _transform_body(body: bytes, mode: Mode) -> bytes:
+def _transform_body(
+    body: bytes, mode: Mode, include_markers: bool
+) -> tuple[bytes, Mode, str | None]:
     try:
         body_dict = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return body
-    new_body = transform.apply(body_dict, mode)
-    return json.dumps(new_body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        return body, mode, None
+    new_body, effective, override = transform.apply(
+        body_dict, mode, include_markers=include_markers
+    )
+    if effective is mode and override is None and effective.directive is None:
+        # Pure passthrough — keep original bytes verbatim.
+        return body, mode, None
+    encoded = json.dumps(new_body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return encoded, effective, override
 
 
 async def _forward(
-    request: Request, client: httpx.AsyncClient, body: bytes, mode: Mode
+    request: Request,
+    client: httpx.AsyncClient,
+    body: bytes,
+    mode: Mode,
+    override: str | None,
 ) -> Response:
     method = request.method
     path = request.url.path
@@ -74,7 +90,7 @@ async def _forward(
         upstream = await client.send(upstream_request, stream=True)
     except (httpx.ConnectError, httpx.ReadError, httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
         log.warning("upstream unreachable: %s", type(exc).__name__)
-        _log_validation(method, path, "NA", 0, mode)
+        _log_validation(method, path, "NA", 0, mode, override)
         return JSONResponse(
             {"error": "upstream_unreachable", "detail": type(exc).__name__},
             status_code=502,
@@ -92,7 +108,7 @@ async def _forward(
                 yield chunk
         finally:
             await upstream.aclose()
-            _log_validation(method, path, status, total, mode)
+            _log_validation(method, path, status, total, mode, override)
 
     return StreamingResponse(
         content=body_iter(),
@@ -102,26 +118,26 @@ async def _forward(
     )
 
 
-def _log_validation(method: str, path: str, status: object, total: int, mode: Mode) -> None:
+def _log_validation(
+    method: str,
+    path: str,
+    status: object,
+    total: int,
+    mode: Mode,
+    override: str | None,
+) -> None:
+    parts = [
+        f"proxy method={method}",
+        f"path={path}",
+        f"upstream_status={status}",
+        f"bytes={total}",
+        f"mode={mode.name}",
+    ]
+    if override is not None:
+        parts.append(f"override={override}")
     if log.isEnabledFor(logging.DEBUG) and mode.directive is not None:
-        log.info(
-            "proxy method=%s path=%s upstream_status=%s bytes=%d mode=%s directive=%r",
-            method,
-            path,
-            status,
-            total,
-            mode.name,
-            mode.directive,
-        )
-    else:
-        log.info(
-            "proxy method=%s path=%s upstream_status=%s bytes=%d mode=%s",
-            method,
-            path,
-            status,
-            total,
-            mode.name,
-        )
+        parts.append(f"directive={mode.directive!r}")
+    log.info(" ".join(parts))
 
 
 def _filter_request_headers(incoming: Mapping[str, str]) -> dict[str, str]:

@@ -28,18 +28,39 @@ Invariants:
 
 ### Icon
 
-The menu-bar title is a single-line string of the form `"fu {glyph}"`, set via rumps' standard `self.title` assignment. No custom image rendering.
+The menu-bar title is a single-line string of the form `"ephew {glyph}"`, set via rumps' standard `self.title` assignment. No custom image rendering.
 
 Examples:
 
 ```
-fu .        (very-concise — also handles yes/no)
-fu ..       (concise)
-fu -        (normal)
-fu "        (thorough)
-fu ""       (very-thorough)
-fu ⊞        (table)
+ephew -x        (none — passthrough)
+ephew -c        (concise)
+ephew -p        (paragraph)
+ephew -v        (verbose)
+ephew -t        (table)
 ```
+
+The dash-letter glyphs are identical to the in-prompt override short flags (see [spec-modes.md](./spec-modes.md)) — the token the user sees in the menu bar is the token they can type at the end of a prompt to one-shot that mode.
+
+### Activity spin
+
+When the proxy handles a request, it calls `activity.pulse()` (see [spec-activity.md](./spec-activity.md)). The tray subscribes; on each pulse a small braille spinner character is briefly inserted between the brand and the mode glyph, walking through 10 frames at 60 ms each (~600 ms total). This is the user's at-a-glance confirmation that a Claude call actually flowed through ephew (vs. silently bypassing it because `ANTHROPIC_BASE_URL` wasn't set).
+
+Title shape during a spin tick `f`:
+
+```
+ephew⠋ -c        (frame 0)
+ephew⠙ -c        (frame 1)
+... etc through ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏ ...
+ephew -c         (restored after the last frame)
+```
+
+Implementation notes:
+
+- Title swaps via `self.title = ...` only — no `NSImage` rendering, no AppKit canvas geometry. Renders cleanly in the menu-bar font alongside the brand and glyph.
+- The pulse handler runs on the proxy's asyncio thread; the tray marshals onto the main thread via `AppHelper.callAfter`. Subsequent ticks are scheduled via `AppHelper.callLater(interval, …)`.
+- **Concurrency.** Every pulse increments a `_spin_generation` counter and starts a fresh tick chain. Each tick checks its generation against the current; stale chains exit without touching the title. This gives clean restart-from-frame-0 semantics if pulses arrive during an in-progress spin.
+- **Mode change during spin.** Each tick re-reads `state.get().glyph`, so a hotkey or menu click mid-spin shows the new glyph immediately on the next frame; the restore step also reads fresh state.
 
 Rationale: the single-line form renders cleanly in the menu bar with the system's native font, weight, and vertical metrics. The two-line stacked form required manual `NSImage` rendering and fought with descenders, baseline alignment, and menu-bar row height. One line is visually consistent across all modes and trivially maintained.
 
@@ -53,25 +74,23 @@ Default layout (no `--verbose`):
 
 ```
 ── Ephew ──
-  ○ very concise
+  ● none
   ○ concise
-  ● normal
-  ○ thorough
-  ○ very thorough
+  ○ paragraph
+  ○ verbose
   ○ table
   ─────────
   Quit
 ```
 
-Under `--verbose` (see [spec-cli.md](./spec-cli.md)), each non-`normal` mode's menu item is annotated with its directive text in parentheses:
+Under `--verbose` (see [spec-cli.md](./spec-cli.md)), each non-`none` mode's menu item is annotated with its directive text in parentheses:
 
 ```
 ── Ephew ──
-  ○ very concise (Yes or no if possible. Max 5 words otherwise.)
-  ○ concise (One sentence.)
-  ● normal
-  ○ thorough (Include reasoning, tradeoffs, and an example if it helps.)
-  ○ very thorough (Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.)
+  ● none
+  ○ concise (Fewest words possible. Max one sentence.)
+  ○ paragraph (2 paragraphs max, biasing to the least response needed.)
+  ○ verbose (Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.)
   ○ table (Markdown table only, no prose.)
   ─────────
   Quit
@@ -92,7 +111,7 @@ def _on_mode_change(self, new_mode: Mode) -> None:
     AppHelper.callAfter(self._refresh_ui, new_mode)
 ```
 
-`_refresh_ui` assigns `self.title = f"fu {mode.glyph}"` and sets `state=1` on the new mode's menu item and `state=0` on all others. Runs on the main thread, so direct AppKit mutation is safe.
+`_refresh_ui` assigns `self.title = f"ephew {mode.glyph}"` and sets `state=1` on the new mode's menu item and `state=0` on all others. Runs on the main thread, so direct AppKit mutation is safe.
 
 ### Quit
 
@@ -123,4 +142,4 @@ Third-party: `rumps`.
 Unit tests are limited because `rumps` wraps AppKit and is awkward to mock. Verify via:
 
 - A smoke test that constructs `TrayApp(state, on_quit=lambda: None)` without crashing (import-only; don't call `.run()`).
-- Manual (per [spec-testing.md](./spec-testing.md)): confirm on launch the menu-bar title reads `fu -` (normal glyph), the menu lists all 6 modes in cycle order (`very concise` → `concise` → `normal` → `thorough` → `very thorough` → `table`) with `normal` checked, clicking `concise` updates both the checkmark and the title (to `fu ..`), pressing the hotkey also updates both, Quit exits cleanly. When launched with `--verbose`, menu items for non-`normal` modes are annotated with their directive in parentheses.
+- Manual (per [spec-testing.md](./spec-testing.md)): confirm on launch the menu-bar title reads `ephew -x` (none glyph), the menu lists all 5 modes in cycle order (`none` → `concise` → `paragraph` → `verbose` → `table`) with `none` checked, clicking `concise` updates both the checkmark and the title (to `ephew -c`), pressing the hotkey also updates both, Quit exits cleanly. When launched with `--verbose`, menu items for non-`none` modes are annotated with their directive in parentheses.

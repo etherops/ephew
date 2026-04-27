@@ -100,4 +100,4 @@ Hotkey behavior can't be unit-tested without a running event loop. Verify via:
 
 - A smoke test that `HotkeyRegistration(state).install()` returns a bool and doesn't raise on a machine where the shortcut is already taken (simulate by registering twice; second call returns `False`).
 - A test that `install()` followed by `uninstall()` is clean — no leaked event handlers.
-- Manual (per [spec-testing.md](./spec-testing.md)): after `ephew` is running, press `⇧⌘E`; observe the chip and tray menu advance one step. Repeat 7 times to confirm wrap-around from `table` back to `normal`. Confirm no macOS privacy prompt appears on first launch.
+- Manual (per [spec-testing.md](./spec-testing.md)): after `ephew` is running, press `⇧⌘E`; observe the chip and tray menu advance one step. Repeat 5 times to confirm wrap-around from `table` back to `none`. Confirm no macOS privacy prompt appears on first launch.

@@ -7,8 +7,8 @@ import threading
 import time
 from typing import cast
 
-import fastapi
 import uvicorn
+from starlette.applications import Starlette
 
 log = logging.getLogger("ephew.server")
 
@@ -18,7 +18,7 @@ class PortInUseError(RuntimeError):
 
 
 class ProxyServer:
-    def __init__(self, app: fastapi.FastAPI, host: str = "127.0.0.1", port: int = 47821):
+    def __init__(self, app: Starlette, host: str = "127.0.0.1", port: int = 47821):
         self._app = app
         self._host = host
         self._port = port

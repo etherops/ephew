@@ -35,14 +35,39 @@ Invariants:
 
 ## Behavior
 
-### CLI flags
+### CLI flags (default daemon mode — no subcommand)
 
-- `--verbose` / `-v` — two effects: (1) extend the per-request validation log line with the full directive text that was appended (see [spec-proxy.md](./spec-proxy.md)); (2) annotate each non-`normal` tray menu item with its directive in parentheses (see [spec-tray.md](./spec-tray.md)). Off by default. **Scope:** raises only the `ephew.*` logger namespace to DEBUG. Third-party libraries (`httpx`, `httpcore`, `uvicorn`, `asyncio`, etc.) stay at WARNING regardless of `--verbose` — `--verbose` is for *our* output, not for stack-tracing the dependencies.
+- `--verbose` / `-v` — two effects: (1) extend the per-request validation log line with the full directive text that was appended (see [spec-proxy.md](./spec-proxy.md)); (2) annotate each non-`none` tray menu item with its directive in parentheses (see [spec-tray.md](./spec-tray.md)). Off by default. **Scope:** raises only the `ephew.*` logger namespace to DEBUG. Third-party libraries (`httpx`, `httpcore`, `uvicorn`, `asyncio`, etc.) stay at WARNING regardless of `--verbose` — `--verbose` is for *our* output, not for stack-tracing the dependencies.
 - `--port N` — override the default proxy port (`47821`). Resolution order: `--port` flag > `EPHEW_PORT` env var > default `47821`.
 - `--version` — print version from `ephew.__version__` to stdout and exit 0.
 - `--help` — print help to stdout and exit 0. The help includes a modes table rendered from `ephew.modes.MODES` (glyph, display name, directive).
 
 Parsed with `argparse`. Unknown flags exit 2.
+
+### `ephew setup` subcommand
+
+A first-run helper that emits the `ANTHROPIC_BASE_URL` export users need so their Claude clients route through ephew. A child process can't directly mutate its parent shell's environment; this command works around that by printing shell-source-able output the user `eval`s into their current shell, or by appending a line to their shell rc for permanent use.
+
+Three invocation modes:
+
+| Form | Output | Effect |
+|---|---|---|
+| `ephew setup` | Friendly multi-line message to stdout: the export line + the two ways to apply it (eval-into-current-shell, append-to-rc) | None — purely informational |
+| `ephew setup --print` | One line to stdout: `export ANTHROPIC_BASE_URL=http://127.0.0.1:47821` | Designed for `eval "$(ephew setup --print)"` — sets the var in the calling shell |
+| `ephew setup --append-rc` | Status to stderr | Appends the export line to the user's detected shell rc (`~/.zshrc`, `~/.bashrc`, `~/.config/fish/config.fish`, etc.) and exits 0. Idempotent — uses an `# ephew` trailing-comment marker to detect a previous insertion and skip it |
+
+Port resolution for the URL emitted: `--port` (subcommand-local) > `EPHEW_PORT` env var > default `47821`. Same precedence as the daemon, so `EPHEW_PORT=12345 ephew setup` and `EPHEW_PORT=12345 ephew` agree.
+
+Shell rc detection (used only by `--append-rc`):
+
+| `$SHELL` ends with | RC file written |
+|---|---|
+| `zsh` | `~/.zshrc` |
+| `bash` | `~/.bashrc` |
+| `fish` | `~/.config/fish/config.fish` (uses `set -gx ANTHROPIC_BASE_URL ...` syntax instead of `export`) |
+| anything else | `~/.profile` |
+
+Out of scope: removing the line, switching from one rc file to another, GUI confirmation. The append is one-way; users edit the rc by hand to undo.
 
 ### Startup order
 
@@ -97,12 +122,18 @@ Standard argparse help, followed by a modes section (as the argparse `epilog`, r
 
 ```
 modes (cycle in order; hotkey ⇧⌘E):
-  .     very concise    Yes or no if possible. Max 5 words otherwise.
-  ..    concise         One sentence.
-  -     normal          passthrough — no directive appended
-  "     thorough        Include reasoning, tradeoffs, and an example if it helps.
-  ""    very thorough   Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.
-  ⊞     table           Markdown table only, no prose.
+  -x    none        passthrough — no directive appended
+  -c    concise     Fewest words possible. Max one sentence.
+  -p    paragraph   2 paragraphs max, biasing to the least response needed.
+  -v    verbose     Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.
+  -t    table       Markdown table only, no prose.
+
+per-request override (append to your prompt's last line):
+  -x / --none        one-shot passthrough
+  -c / --concise     one-shot concise
+  -p / --paragraph   one-shot paragraph
+  -v / --verbose     one-shot verbose
+  -t / --table       one-shot table
 ```
 
 Built dynamically from `ephew.modes.MODES` so the help never drifts from the runtime modes.

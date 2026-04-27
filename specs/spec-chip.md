@@ -106,4 +106,4 @@ Third-party: `pyobjc-framework-Cocoa`.
 UI unit tests are impractical. Verify via:
 
 - A smoke test that `ModeChip(state)` can be constructed without crashing (no `show()` call in headless CI).
-- Manual (per [spec-testing.md](./spec-testing.md)): confirm the chip appears bottom-right at launch, shows `normal`, updates within ~100 ms of every mode change (hotkey and menu both), follows the user across Spaces and into full-screen apps, and never intercepts clicks on the app behind it.
+- Manual (per [spec-testing.md](./spec-testing.md)): confirm the chip appears bottom-right at launch, shows `none`, updates within ~100 ms of every mode change (hotkey and menu both), follows the user across Spaces and into full-screen apps, and never intercepts clicks on the app behind it.

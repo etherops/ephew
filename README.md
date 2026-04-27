@@ -8,15 +8,22 @@ Claude Code (and every other Anthropic-API client) has no fast way to toggle res
 
 ## Install
 
+### macOS (recommended)
+
 ```bash
-git clone <this-repo>
-cd ephew
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+brew tap etherops/funstuff
+brew install ephew
 ```
 
-Requires Python 3.12+ and macOS. Linux will run the proxy headlessly but without the tray, chip, or hotkey.
+### Other platforms
+
+```bash
+pipx install ephew     # or: pip install ephew
+```
+
+Requires Python 3.12+. Full UX (menu-bar tray, global hotkey) is macOS-only; Linux runs the proxy headlessly.
+
+For development setup (`git clone` + editable install + tests), see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## Run
 
@@ -44,18 +51,31 @@ The request flows through ephew → `api.anthropic.com` → back to your client.
 
 ## Modes
 
-Cycle with `⇧⌘E`, or click a mode in the menu-bar dropdown. The title reads `fu <glyph>` so you always know which mode is active:
+Cycle with `⇧⌘E`, or click a mode in the menu-bar dropdown. The title reads `ephew <glyph>` so you always know which mode is active:
 
 | Glyph | Mode | Response shape |
 |---|---|---|
-| `.` | very concise | Yes/no if possible, max 5 words otherwise |
-| `..` | concise | One sentence |
-| `-` | normal | Passthrough — no modification |
-| `"` | thorough | Reasoning, tradeoffs, an example |
-| `""` | very thorough | Deep — reasoning, tradeoffs, edge cases (skip padding) |
-| `⊞` | table | Markdown table only, no prose |
+| `-x` | none | Passthrough — no modification |
+| `-c` | concise | Fewest words possible; one-sentence cap |
+| `-p` | paragraph | 2 paragraphs max; biased toward the shortest response that fits |
+| `-v` | verbose | Deep — reasoning, tradeoffs, edge cases (skip padding) |
+| `-t` | table | Markdown table only, no prose |
 
-Startup mode is always `normal`. Cycle order: very-concise → concise → normal → thorough → very-thorough → table → (wrap).
+Startup mode is always `none`. Cycle order: none → concise → paragraph → verbose → table → (wrap).
+
+### Per-request override
+
+Append a flag to the very end of any prompt to one-shot a specific mode without touching the tray:
+
+```bash
+claude "explain go channels -v"        # forces verbose for this request
+claude "list HTTP status codes -t"     # forces table
+claude "summarize the rfc -p"          # forces a single dense paragraph
+claude "is python interpreted -c"      # forces concise
+claude "just chat -x"                  # forces passthrough
+```
+
+The flag (`-x`/`-c`/`-p`/`-v`/`-t` or the long forms `--none`/`--concise`/`--paragraph`/`--verbose`/`--table`) is stripped before the request is forwarded; the active tray mode is **not** modified. Each override is logged with `mode=<chosen> override=<flag>` so you can audit.
 
 ## Flags
 

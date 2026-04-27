@@ -16,13 +16,13 @@ def test_help_lists_modes(capsys):
         main(["--help"])
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
-    # Epilog must include every non-normal mode and its directive.
+    # Epilog must include every non-none mode and its directive.
     from ephew.modes import MODES
 
     for mode in MODES:
         assert mode.display in captured.out
     # And at least one full directive text appears.
-    assert "One sentence." in captured.out
+    assert "Max one sentence." in captured.out
 
 
 def test_version_prints_and_exits_zero(capsys):
@@ -61,6 +61,78 @@ def test_verbose_flag_parsed():
     assert ns.verbose is True
     ns = parser.parse_args([])
     assert ns.verbose is False
+
+
+def test_setup_default_prints_friendly_message(capsys):
+    rc = main(["setup"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ANTHROPIC_BASE_URL" in out
+    assert "127.0.0.1:47821" in out
+    # Friendly form mentions both apply paths.
+    assert "eval" in out.lower()
+    assert "rc" in out.lower() or "shell" in out.lower()
+
+
+def test_setup_print_emits_single_export_line(capsys):
+    rc = main(["setup", "--print"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    assert out == "export ANTHROPIC_BASE_URL=http://127.0.0.1:47821"
+
+
+def test_setup_print_honors_port_flag(capsys):
+    rc = main(["setup", "--print", "--port", "12345"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    assert out == "export ANTHROPIC_BASE_URL=http://127.0.0.1:12345"
+
+
+def test_setup_print_honors_ephew_port_env(monkeypatch, capsys):
+    monkeypatch.setenv("EPHEW_PORT", "33333")
+    rc = main(["setup", "--print"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    assert out == "export ANTHROPIC_BASE_URL=http://127.0.0.1:33333"
+
+
+def test_setup_append_rc_writes_line(tmp_path, monkeypatch, capsys):
+    rc_file = tmp_path / ".zshrc"
+    rc_file.write_text("# pre-existing content\n")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+
+    rc = main(["setup", "--append-rc"])
+    assert rc == 0
+    contents = rc_file.read_text()
+    assert "export ANTHROPIC_BASE_URL=http://127.0.0.1:47821" in contents
+    assert "# ephew" in contents
+    assert contents.startswith("# pre-existing content\n")
+
+
+def test_setup_append_rc_is_idempotent(tmp_path, monkeypatch):
+    rc_file = tmp_path / ".zshrc"
+    rc_file.write_text("\n")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+
+    main(["setup", "--append-rc"])
+    main(["setup", "--append-rc"])
+    contents = rc_file.read_text()
+    assert contents.count("export ANTHROPIC_BASE_URL") == 1
+
+
+def test_setup_append_rc_uses_fish_syntax_when_shell_is_fish(tmp_path, monkeypatch):
+    rc_file = tmp_path / ".config/fish/config.fish"
+    rc_file.parent.mkdir(parents=True)
+    rc_file.write_text("")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SHELL", "/usr/local/bin/fish")
+
+    main(["setup", "--append-rc"])
+    contents = rc_file.read_text()
+    assert "set -gx ANTHROPIC_BASE_URL http://127.0.0.1:47821" in contents
+    assert "export" not in contents
 
 
 def test_verbose_does_not_enable_third_party_debug():

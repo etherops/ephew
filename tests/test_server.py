@@ -2,7 +2,10 @@ import socket
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from ephew.server import PortInUseError, ProxyServer
 
@@ -13,14 +16,11 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _trivial_app() -> FastAPI:
-    app = FastAPI()
+def _trivial_app() -> Starlette:
+    async def ping(_request: Request) -> JSONResponse:
+        return JSONResponse({"ok": True})
 
-    @app.get("/ping")
-    def ping():
-        return {"ok": True}
-
-    return app
+    return Starlette(routes=[Route("/ping", ping, methods=["GET"])])
 
 
 def test_start_serve_stop():

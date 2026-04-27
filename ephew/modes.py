@@ -9,50 +9,62 @@ class Mode:
     directive: str | None
     display: str
     glyph: str
+    marker_instruction: str = ""
 
 
 MODES: tuple[Mode, ...] = (
     Mode(
-        name="very-concise",
-        directive="Yes or no if possible. Max 5 words otherwise.",
-        display="very concise",
-        glyph=".",
+        name="none",
+        directive=None,
+        display="none",
+        glyph="-x",
     ),
     Mode(
         name="concise",
-        directive="One sentence.",
+        directive="Fewest words possible. Max one sentence.",
         display="concise",
-        glyph="..",
+        glyph="-c",
+        marker_instruction="End your response with a space followed by the literal text: (ephew-c)",
     ),
     Mode(
-        name="normal",
-        directive=None,
-        display="normal",
-        glyph="-",
+        name="paragraph",
+        directive="2 paragraphs max, biasing to the least response needed.",
+        display="paragraph",
+        glyph="-p",
+        marker_instruction="End your response with a space followed by the literal text: (ephew-p)",
     ),
     Mode(
-        name="thorough",
-        directive="Include reasoning, tradeoffs, and an example if it helps.",
-        display="thorough",
-        glyph='"',
-    ),
-    Mode(
-        name="very-thorough",
+        name="verbose",
         directive="Go deep where depth helps: reasoning, tradeoffs, edge cases. Skip padding.",
-        display="very thorough",
-        glyph='""',
+        display="verbose",
+        glyph="-v",
+        marker_instruction="End your response with a space followed by the literal text: (ephew-v)",
     ),
     Mode(
         name="table",
         directive="Markdown table only, no prose.",
         display="table",
-        glyph="⊞",
+        glyph="-t",
+        marker_instruction="End your response with a space followed by the literal text: (ephew-t)",
     ),
 )
 
 _BY_NAME: dict[str, Mode] = {m.name: m for m in MODES}
 
-DEFAULT: Mode = _BY_NAME["normal"]
+DEFAULT: Mode = _BY_NAME["none"]
+
+OVERRIDE_FLAGS: dict[str, str] = {
+    "-x": "none",
+    "--none": "none",
+    "-c": "concise",
+    "--concise": "concise",
+    "-p": "paragraph",
+    "--paragraph": "paragraph",
+    "-v": "verbose",
+    "--verbose": "verbose",
+    "-t": "table",
+    "--table": "table",
+}
 
 
 def next_mode(current: Mode) -> Mode:

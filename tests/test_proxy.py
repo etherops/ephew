@@ -2,7 +2,7 @@ import json
 import logging
 
 import httpx
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from ephew.modes import DEFAULT, find_by_name
 from ephew.proxy import build_app
@@ -18,7 +18,7 @@ def _make_client_and_state(handler, mode=None):
     return client, state
 
 
-def test_post_messages_passthrough_when_normal():
+def test_post_messages_passthrough_when_none_mode():
     received: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -35,7 +35,6 @@ def test_post_messages_passthrough_when_normal():
         headers={"x-api-key": FAKE_KEY, "content-type": "application/json"},
     )
     assert r.status_code == 200
-    # Normal mode: body passes through unchanged.
     assert received["body"] == body
     assert received["auth"] == FAKE_KEY
 
@@ -49,7 +48,7 @@ def test_post_messages_transformed_under_concise_mode():
 
     concise = find_by_name("concise")
     client, state = _make_client_and_state(handler, mode=concise)
-    tc = TestClient(build_app(client, state))
+    tc = TestClient(build_app(client, state, include_markers=False))
     original = {
         "model": "claude-3",
         "messages": [{"role": "user", "content": "hello"}],
@@ -82,7 +81,6 @@ def test_non_messages_post_not_transformed():
     client, state = _make_client_and_state(handler, mode=find_by_name("concise"))
     tc = TestClient(build_app(client, state))
     body = b'{"messages":[{"role":"user","content":"hello"}]}'
-    # Different path — not transformed even in concise mode.
     tc.post("/v1/messages/count_tokens", content=body)
     assert received["body"] == body
 
@@ -196,17 +194,50 @@ def test_validation_log_includes_directive_at_debug_level(caplog):
     )
 
 
-def test_normal_mode_validation_line_has_no_directive(caplog):
+def test_markers_default_on_in_build_app():
+    received: dict = {}
+
+    def handler(request):
+        received["body"] = request.content
+        return httpx.Response(200, content=b"{}")
+
+    concise = find_by_name("concise")
+    client, state = _make_client_and_state(handler, mode=concise)
+    tc = TestClient(build_app(client, state))
+    body = b'{"messages":[{"role":"user","content":"hi"}]}'
+    tc.post("/v1/messages", content=body)
+    forwarded = received["body"].decode()
+    assert "(ephew-c)" in forwarded
+
+
+def test_markers_off_when_include_markers_false():
+    received: dict = {}
+
+    def handler(request):
+        received["body"] = request.content
+        return httpx.Response(200, content=b"{}")
+
+    concise = find_by_name("concise")
+    client, state = _make_client_and_state(handler, mode=concise)
+    tc = TestClient(build_app(client, state, include_markers=False))
+    body = b'{"messages":[{"role":"user","content":"hi"}]}'
+    tc.post("/v1/messages", content=body)
+    forwarded = received["body"].decode()
+    assert "(ephew-c)" not in forwarded
+    assert concise.directive in forwarded
+
+
+def test_none_mode_validation_line_has_no_directive(caplog):
     def handler(_r):
         return httpx.Response(200, content=b"{}")
 
-    client, state = _make_client_and_state(handler)  # normal mode
+    client, state = _make_client_and_state(handler)
     tc = TestClient(build_app(client, state))
     with caplog.at_level(logging.DEBUG, logger="ephew.proxy"):
         tc.post("/v1/messages", content=b'{"messages":[{"role":"user","content":"hi"}]}')
 
     messages = [rec.getMessage() for rec in caplog.records]
-    assert any("mode=normal" in m for m in messages)
+    assert any("mode=none" in m for m in messages)
     assert not any("directive=" in m for m in messages)
 
 
@@ -221,5 +252,96 @@ def test_malformed_json_body_forwarded_untransformed():
     tc = TestClient(build_app(client, state))
     body = b"not-valid-json{{{"
     tc.post("/v1/messages", content=body)
-    # Defensive: malformed JSON passes through unchanged so Anthropic returns the real error.
     assert received["body"] == body
+
+
+# ---------------------------------------------------------------------------
+# In-prompt override
+
+
+def test_override_swaps_mode_for_request(caplog):
+    received: dict = {}
+
+    def handler(request):
+        received["body"] = request.content
+        return httpx.Response(200, content=b"{}")
+
+    # Active mode is none; user appends -v to override for this single request.
+    client, state = _make_client_and_state(handler)
+    tc = TestClient(build_app(client, state, include_markers=False))
+    body = json.dumps({"messages": [{"role": "user", "content": "explain channels -v"}]}).encode()
+    with caplog.at_level(logging.INFO, logger="ephew.proxy"):
+        tc.post("/v1/messages", content=body)
+
+    forwarded = json.loads(received["body"])
+    verbose = find_by_name("verbose")
+    text = forwarded["messages"][0]["content"]
+    assert text.endswith(verbose.directive)
+    assert " -v" not in text
+
+    # Active mode hasn't moved.
+    assert state.get().name == "none"
+
+    # Log line records effective mode + override flag.
+    messages = [rec.getMessage() for rec in caplog.records]
+    assert any("mode=verbose" in m and "override=-v" in m for m in messages), (
+        f"expected verbose-override log line; got: {messages}"
+    )
+
+
+def test_override_long_form_in_log(caplog):
+    def handler(_r):
+        return httpx.Response(200, content=b"{}")
+
+    client, state = _make_client_and_state(handler, mode=find_by_name("concise"))
+    tc = TestClient(build_app(client, state))
+    body = json.dumps({"messages": [{"role": "user", "content": "hi --table"}]}).encode()
+    with caplog.at_level(logging.INFO, logger="ephew.proxy"):
+        tc.post("/v1/messages", content=body)
+
+    messages = [rec.getMessage() for rec in caplog.records]
+    assert any("mode=table" in m and "override=--table" in m for m in messages)
+
+
+def test_activity_pulse_fires_per_request():
+    from ephew.activity import ActivityNotifier
+
+    pulses = []
+    activity = ActivityNotifier()
+    activity.subscribe(lambda: pulses.append(1))
+
+    def handler(_r):
+        return httpx.Response(200, content=b"{}")
+
+    client, state = _make_client_and_state(handler)
+    tc = TestClient(build_app(client, state, activity=activity))
+    tc.post("/v1/messages", content=b"{}")
+    tc.get("/v1/models")
+    tc.post("/v1/messages", content=b"{}")
+    assert sum(pulses) == 3
+
+
+def test_no_activity_means_no_pulse_required():
+    """build_app without activity= still works (pulse path is opt-in)."""
+
+    def handler(_r):
+        return httpx.Response(200, content=b"{}")
+
+    client, state = _make_client_and_state(handler)
+    tc = TestClient(build_app(client, state))
+    r = tc.post("/v1/messages", content=b"{}")
+    assert r.status_code == 200
+
+
+def test_no_override_no_override_field_in_log(caplog):
+    def handler(_r):
+        return httpx.Response(200, content=b"{}")
+
+    client, state = _make_client_and_state(handler, mode=find_by_name("concise"))
+    tc = TestClient(build_app(client, state))
+    body = json.dumps({"messages": [{"role": "user", "content": "no flag here"}]}).encode()
+    with caplog.at_level(logging.INFO, logger="ephew.proxy"):
+        tc.post("/v1/messages", content=body)
+
+    messages = [rec.getMessage() for rec in caplog.records]
+    assert any("mode=concise" in m and "override=" not in m for m in messages)
